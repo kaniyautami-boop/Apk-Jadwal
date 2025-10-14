@@ -1,0 +1,462 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Clanvas - Aplikasi Penjadwalan Kelas</title>
+    <!-- Tailwind CSS & Fonts -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <style>
+        :root {
+            --c-primary: #93c5fd; /* Soft Blue */
+            --c-primary-light: #bfdbfe; /* Lighter Blue */
+            --c-secondary: #fde047; /* Soft Yellow */
+            --c-accent: #facc15; /* A bit darker Yellow */
+            --c-bg: linear-gradient(135deg, #eff6ff 0%, #fefce8 100%); /* Soft Blue to Soft Yellow */
+            --c-surface: rgba(255, 255, 255, 0.9);
+            --c-text-dark: #1e293b; 
+            --c-text-light: #64748b;
+            --c-white: #ffffff;
+            --c-border: #e2e8f0;
+            --c-shadow: rgba(100, 116, 139, 0.08);
+            --c-shadow-lg: rgba(100, 116, 139, 0.12);
+        }
+
+        html, body { height: 100%; overflow: hidden; }
+        #app, .view { height: 100%; overflow-y: auto; overflow-x: hidden; background: var(--c-bg); }
+        body { font-family: 'Poppins', sans-serif; color: var(--c-text-dark); }
+        .view { display: none; }
+        .view.active-view { display: block; animation: fadeIn 0.5s ease-in-out; }
+        #landingView.active-view, #loginView.active-view, #introView.active-view { display: flex; }
+        
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
+        
+        .form-container { 
+            background-color: var(--c-surface); 
+            backdrop-filter: blur(16px); 
+            border: 1px solid rgba(255, 255, 255, 0.5);
+            box-shadow: 0 10px 25px -5px var(--c-shadow-lg);
+            border-radius: 1.5rem;
+        }
+        .main-tab-btn.active { 
+            background-color: var(--c-primary); 
+            color: var(--c-white); 
+            font-weight: 700;
+            box-shadow: 0 4px 15px var(--c-shadow-lg);
+        }
+        .fixed-modal { position: fixed; inset: 0; background-color: rgba(0,0,0,0.5); display: none; align-items: center; justify-content: center; z-index: 50; padding: 1rem; }
+        .fixed-modal.active { display: flex; animation: fadeInModal 0.3s ease-out; }
+        @keyframes fadeInModal { from { opacity: 0; transform: scale(0.95); } to { opacity: 1; transform: scale(1); } }
+        
+        .elegant-title { text-shadow: 0px 3px 10px rgba(147, 197, 253, 0.5); }
+        
+        /* Butterfly Animation */
+        .butterflies-container { position: absolute; top: 0; left: 0; width: 100%; height: 100%; overflow: hidden; pointer-events: none; z-index: 0; }
+        .butterfly { position: absolute; width: 20px; height: 20px; opacity: 0; animation: fly-around 15s linear infinite; }
+        .butterfly::before, .butterfly::after { content: ''; position: absolute; width: 12px; height: 18px; background-color: var(--c-accent); border-radius: 50% 50% 0 50%; }
+        .butterfly::before { left: 0; transform-origin: 0 100%; transform: rotate(20deg); animation: flutter-left 0.3s infinite alternate; }
+        .butterfly::after { right: 0; background-color: var(--c-primary-light); transform-origin: 100% 100%; transform: rotate(-20deg); animation: flutter-right 0.3s infinite alternate; }
+        @keyframes flutter-left { to { transform: rotate(45deg) scale(1.05); } }
+        @keyframes flutter-right { to { transform: rotate(-45deg) scale(1.05); } }
+        @keyframes fly-around { 0% { top: 110%; left: -10%; } 10% { opacity: 0.7; } 100% { top: -10%; left: 110%; } }
+        .butterfly:nth-child(1) { animation-duration: 20s; animation-delay: 0s; transform: scale(0.8); }
+        .butterfly:nth-child(2) { animation-duration: 17s; animation-delay: 3s; transform: scale(1); }
+        .butterfly:nth-child(3) { animation-duration: 22s; animation-delay: 5s; transform: scale(0.9); }
+        
+        .toggle-switch { display: inline-block; position: relative; width: 44px; height: 24px; }
+        .toggle-switch input { opacity: 0; width: 0; height: 0; }
+        .toggle-slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #ccc; transition: .4s; border-radius: 34px; }
+        .toggle-slider:before { position: absolute; content: ""; height: 18px; width: 18px; left: 3px; bottom: 3px; background-color: white; transition: .4s; border-radius: 50%; }
+        input:checked + .toggle-slider { background-color: var(--c-primary); }
+        input:checked + .toggle-slider:before { transform: translateX(20px); }
+
+        .mood-calendar { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; }
+        .mood-calendar > div { aspect-ratio: 1/1; display: flex; align-items: center; justify-content: center; border-radius: 50%; }
+        .calendar-day { font-size: 0.8rem; color: var(--c-text-light); }
+
+        /* Intro Animation */
+        @keyframes intro-fade-in-out {
+            0%, 100% { opacity: 0; transform: scale(0.9); }
+            50% { opacity: 1; transform: scale(1); }
+        }
+        #introTitle {
+            animation: intro-fade-in-out 2.5s ease-in-out forwards;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="app" class="min-h-screen">
+        <div id="loadingSpinner" class="fixed inset-0 bg-white/70 z-50 flex-col items-center justify-center hidden"><div class="animate-spin rounded-full h-16 w-16 border-b-4 border-[var(--c-primary)]"></div><p class="mt-4 font-semibold">Memuat...</p></div>
+
+        <div id="introView" class="view items-center justify-center p-4 overflow-hidden bg-white">
+            <h1 id="introTitle" class="text-8xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-yellow-300">Clanvas</h1>
+        </div>
+        
+        <div id="landingView" class="view items-center justify-center p-4 overflow-hidden relative">
+            <div class="butterflies-container"><div class="butterfly"></div><div class="butterfly"></div><div class="butterfly"></div></div>
+            <div class="text-center relative z-10">
+                 <svg class="w-56 h-56 mx-auto" viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
+                    <defs><filter id="soft-glow" x="-50%" y="-50%" width="200%" height="200%"><feDropShadow dx="0" dy="0" stdDeviation="8" flood-color="var(--c-primary-light)" flood-opacity="0.8"/></filter></defs>
+                    <g filter="url(#soft-glow)"><path d="M 25 160 C 40 175, 80 175, 100 160 L 100 40 C 80 25, 40 25, 25 40 Z" fill="var(--c-white)"/><path d="M 175 160 C 160 175, 120 175, 100 160 L 100 40 C 120 25, 160 25, 175 40 Z" fill="var(--c-white)"/><path d="M 100 42 L 100 158" stroke="#EAEAEA" stroke-width="2"/></g>
+                    <g transform="translate(155 35) rotate(25) scale(0.5)"><path d="M 0 0 Q 25 -25 30 0 Q 10 20 0 0" fill="var(--c-accent)"/><path d="M 0 0 Q -25 -25 -30 0 Q -10 20 0 0" fill="var(--c-accent)"/><path d="M 0 0 Q 20 25 0 30 Q -15 20 0 0" fill="#fffbeb"/><path d="M 0 0 Q -20 25 0 30 Q 15 20 0 0" fill="#fffbeb"/><path d="M 0 -10 L 0 15" stroke="var(--c-secondary)" stroke-width="2.5" stroke-linecap="round"/></g>
+                </svg>
+                <h1 class="text-7xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-yellow-300 my-2 elegant-title">Clanvas</h1>
+                <p class="max-w-xl mx-auto mt-4 text-center" style="color: var(--c-text-light);">Jelajahi hari sekolahmu dengan mudah. Atur semua jadwal kelasmu di satu tempat. Praktis, mudah, dan efisien.</p>
+                <div class="mt-10 flex justify-center"><button id="goToLoginBtn" class="font-semibold py-3 px-10 rounded-full shadow-lg transition-all transform hover:scale-105 bg-gradient-to-r from-blue-400 to-sky-400 text-white">Masuk</button></div>
+            </div>
+        </div>
+       
+        <div id="loginView" class="view items-center justify-center p-4"><div class="w-full max-w-md"><div class="form-container p-8"><h2 class="text-3xl font-bold text-center mb-2">Selamat Datang</h2><p class="text-center mb-6" style="color: var(--c-text-light);">Silakan masuk untuk melanjutkan</p><form id="authForm"><div class="mb-4"><label for="fullName" class="block text-sm font-medium mb-1" style="color: var(--c-text-light);">Nama Lengkap</label><input type="text" id="fullName" class="w-full px-4 py-2 border rounded-lg focus:ring-2 bg-white/50" style="--tw-ring-color: var(--c-primary-light);" required></div><div class="mb-4"><label for="password" class="block text-sm font-medium mb-1" style="color: var(--c-text-light);">Password</label><input type="password" id="password" class="w-full px-4 py-2 border rounded-lg focus:ring-2 bg-white/50" style="--tw-ring-color: var(--c-primary-light);" required></div><div class="mb-4"><label for="loginRole" class="block text-sm font-medium mb-1" style="color: var(--c-text-light);">Masuk sebagai</label><select id="loginRole" class="w-full px-4 py-2 border rounded-lg bg-white/50"><option value="Siswa">Siswa</option><option value="Admin">Admin</option></select></div><div id="loginGradeContainer" class="mb-4"><label for="loginGrade" class="block text-sm font-medium mb-1" style="color: var(--c-text-light);">Tingkat Kelas</label><select id="loginGrade" class="w-full px-4 py-2 border rounded-lg bg-white/50"><option value="10">10</option><option value="11">11</option><option value="12">12</option></select></div><button type="submit" class="w-full text-white font-bold py-3 px-4 rounded-lg transition bg-gradient-to-r from-blue-500 to-sky-500 hover:from-blue-600 hover:to-sky-600">Masuk</button></form></div><button id="backToLandingBtn" class="mt-4 flex items-center gap-2 mx-auto" style="color: var(--c-text-light);"><i class="fas fa-arrow-left"></i> Kembali</button></div></div>
+       
+        <div id="classSelectionView" class="view"></div>
+        <div id="adminDashboardView" class="view"></div>
+        <div id="studentDashboardView" class="view"></div>
+    </div>
+   
+    <!-- MODAL-MODAL -->
+    <div id="scheduleEditModal" class="fixed-modal"><div class="bg-white rounded-2xl shadow-xl w-full max-w-5xl p-6 max-h-[90vh] flex flex-col"><h3 id="scheduleModalTitle" class="text-xl font-bold mb-4 text-center"></h3><div class="flex-grow overflow-y-auto pr-2 -mr-2"><div class="mb-6"><h4 class="font-bold text-lg mb-2 border-b pb-1">Jadwal Pelajaran</h4><div id="lessonScheduleFormContainer" class="space-y-2"></div><button type="button" id="addLessonBtn" class="mt-3 text-sm text-white py-1 px-3 rounded-md bg-blue-500 hover:bg-blue-600">+ Tambah Pelajaran</button></div><div class="mb-6"><h4 class="font-bold text-lg mb-2 border-b pb-1">Jadwal Piket</h4><div id="picketScheduleFormContainer" class="space-y-2"></div><button type="button" id="addPicketBtn" class="mt-3 text-sm text-white py-1 px-3 rounded-md bg-blue-500 hover:bg-blue-600">+ Tambah Hari Piket</button></div><div><h4 class="font-bold text-lg mb-2 border-b pb-1">Organigram & Wali Kelas</h4><div id="organigramFormContainer" class="space-y-3"></div></div></div><div class="mt-6 flex justify-end gap-2 border-t pt-4"><button type="button" class="modal-close-btn bg-slate-200 py-2 px-4 rounded-md">Tutup</button><button type="button" id="saveScheduleChangesBtn" class="text-white py-2 px-4 rounded-md bg-blue-500 hover:bg-blue-600">Simpan Semua Perubahan</button></div></div></div>
+    <div id="confirmModal" class="fixed-modal"><div class="bg-white rounded-2xl shadow-xl w-full max-w-sm p-6 text-center"><h3 id="confirmTitle" class="text-lg font-bold mb-2">Konfirmasi Tindakan</h3><p id="confirmText" class="text-slate-600 mb-6"></p><div class="flex justify-center gap-4"><button id="cancelDeleteBtn" class="bg-slate-200 py-2 px-6 rounded-md">Batal</button><button id="confirmDeleteBtn" class="bg-red-500 text-white py-2 px-6 rounded-md">Hapus</button></div></div></div>
+    <div id="userAddModal" class="fixed-modal"><div class="bg-white rounded-2xl shadow-xl w-full max-w-md p-6"><h3 class="text-xl font-bold mb-4">Tambah Pengguna Baru</h3><form id="userAddForm"><div class="mb-4"><label for="newFullName" class="block text-sm font-medium">Nama Lengkap</label><input type="text" id="newFullName" class="w-full mt-1 p-2 border rounded-md" required></div><div class="mb-4"><label for="newPassword" class="block text-sm font-medium">Password</label><input type="password" id="newPassword" class="w-full mt-1 p-2 border rounded-md" required></div><div class="mb-4"><label for="newRole" class="block text-sm font-medium">Peran</label><select id="newRole" class="w-full mt-1 p-2 border rounded-md"><option value="Siswa" selected>Siswa</option><option value="Admin">Admin</option></select></div><div id="newUserGradeContainer" class="mb-4"><label for="newGrade" class="block text-sm font-medium">Tingkat Kelas</label><select id="newGrade" class="w-full mt-1 p-2 border rounded-md"><option value="10">10</option><option value="11">11</option><option value="12">12</option></select></div><div class="mt-6 flex justify-end gap-2"><button type="button" class="modal-close-btn bg-slate-200 py-2 px-4 rounded-md">Batal</button><button type="submit" class="text-white py-2 px-4 rounded-md bg-blue-500 hover:bg-blue-600">Tambah</button></div></form></div></div>
+    <div id="userEditModal" class="fixed-modal"><div class="bg-white rounded-2xl shadow-xl w-full max-w-md p-6"><h3 class="text-xl font-bold mb-4">Edit Pengguna</h3><form id="userEditForm"><input type="hidden" id="editUserId"><div class="mb-4"><label for="editFullName" class="block text-sm font-medium">Nama Lengkap</label><input type="text" id="editFullName" class="w-full mt-1 p-2 border rounded-md" required></div><div class="mb-4"><label for="editPassword" class="block text-sm font-medium">Password (kosongkan jika tidak diubah)</label><input type="password" id="editPassword" class="w-full mt-1 p-2 border rounded-md"></div><div class="mb-4"><label for="editRole" class="block text-sm font-medium">Peran</label><select id="editRole" class="w-full mt-1 p-2 border rounded-md"><option value="Siswa">Siswa</option><option value="Admin">Admin</option></select></div><div id="editUserGradeContainer" class="mb-4"><label for="editGrade" class="block text-sm font-medium">Tingkat Kelas</label><select id="editGrade" class="w-full mt-1 p-2 border rounded-md"><option value="10">10</option><option value="11">11</option><option value="12">12</option></select></div><div class="mt-6 flex justify-end gap-2"><button type="button" class="modal-close-btn bg-slate-200 py-2 px-4 rounded-md">Batal</button><button type="submit" class="text-white py-2 px-4 rounded-md bg-blue-500 hover:bg-blue-600">Simpan Perubahan</button></div></form></div></div>
+    <div id="alertBox" class="fixed top-5 right-5 z-50 bg-red-500 text-white py-2 px-4 rounded-lg shadow-md hidden"><p id="alertText"></p></div>
+
+    <script type="module">
+        let currentUserProfile = null;
+        let itemToDelete = { type: null, id: null, name: null };
+        let currentEditingUserId = null;
+        let allUsers = [];
+        let allClasses = [];
+        let miniNotes = {};
+        let moodLogs = [];
+        let currentEditingClassId = null;
+        let notificationInterval = null;
+        const allDays = ["Senin", "Selasa", "Rabu", "Kamis", "Jumat"];
+        const DB_KEY = 'classScheduleAppDB_v5'; // new version key
+        const SESSION_KEY = 'classScheduleAppSession_v5';
+
+        const views = { intro: document.getElementById('introView'), landing: document.getElementById('landingView'), login: document.getElementById('loginView'), classSelection: document.getElementById('classSelectionView'), studentDashboard: document.getElementById('studentDashboardView'), adminDashboard: document.getElementById('adminDashboardView') };
+        const modals = { schedule: document.getElementById('scheduleEditModal'), confirm: document.getElementById('confirmModal'), userAdd: document.getElementById('userAddModal'), userEdit: document.getElementById('userEditModal') };
+        const loadingSpinner = document.getElementById('loadingSpinner');
+
+        const showView = (id) => { Object.values(views).forEach(v => v.classList.remove('active-view')); if(views[id]) views[id].classList.add('active-view'); };
+        const showModal = (id) => { if(modals[id]) modals[id].classList.add('active'); };
+        const closeModal = () => Object.values(modals).forEach(m => m.classList.remove('active'));
+        const showLoading = (show) => { loadingSpinner.style.display = show ? 'flex' : 'none'; };
+        const showAlert = (message, isError = true) => { const el = document.getElementById('alertBox'); el.querySelector('p').textContent = message; el.className = `fixed top-5 right-5 z-50 text-white py-2 px-4 rounded-lg shadow-md ${isError ? 'bg-red-500' : 'bg-green-500'}`; el.classList.remove('hidden'); setTimeout(() => el.classList.add('hidden'), 4000); };
+
+        function initializeDB() {
+            if (!localStorage.getItem(DB_KEY)) {
+                const generatedClasses = [];
+                const grades = ['10', '11', '12'];
+                const letters = 'ABCDEFGHIJKL'.split('');
+                grades.forEach(grade => letters.forEach(letter => {
+                    const className = `${grade}${letter}`;
+                    generatedClasses.push({ id: `class_${className}`, name: className, grade: grade, lessons: [], picket: [], organigram: { waliKelas: '', ketuaMurid: '', wakilKetua: '', sekertaris1: '', sekertaris2: '', bendahara1: '', bendahara2: '', seksi: '' } });
+                }));
+                const initialData = {
+                    users: [
+                        { id: 'admin1', full_name: 'Admin Sekolah', password: 'admin', role: 'Admin', grade: null, selected_class_id: null, notifications_enabled: false },
+                        { id: 'siswa1', full_name: 'Siswa Contoh', password: 'siswa', role: 'Siswa', grade: '10', selected_class_id: null, notifications_enabled: true }
+                    ],
+                    classes: generatedClasses,
+                    mini_notes: { quote: 'Pendidikan adalah senjata paling ampuh.', announcement: 'Selamat datang!' },
+                    mood_logs: []
+                };
+                localStorage.setItem(DB_KEY, JSON.stringify(initialData));
+            }
+        }
+
+        function loadDataFromDB() {
+            const data = JSON.parse(localStorage.getItem(DB_KEY));
+            allUsers = data.users;
+            allClasses = data.classes;
+            miniNotes = data.mini_notes;
+            moodLogs = data.mood_logs;
+        }
+
+        function saveDataToDB() {
+            const data = { users: allUsers, classes: allClasses, mini_notes: miniNotes, mood_logs: moodLogs };
+            localStorage.setItem(DB_KEY, JSON.stringify(data));
+        }
+
+        function handleLogin(fullName, password, role, grade) {
+            showLoading(true);
+            let user = null;
+            if (role === 'Admin') user = allUsers.find(u => u.full_name.toLowerCase() === fullName.toLowerCase() && u.password === password && u.role === 'Admin');
+            else user = allUsers.find(u => u.full_name.toLowerCase() === fullName.toLowerCase() && u.password === password && u.role === 'Siswa' && u.grade === grade);
+            
+            if (user) { currentUserProfile = user; sessionStorage.setItem(SESSION_KEY, JSON.stringify(user)); routeUser(); } 
+            else showAlert('Nama, password, atau peran/tingkat tidak cocok.');
+            showLoading(false);
+        }
+
+        function handleLogout() {
+            if (notificationInterval) clearInterval(notificationInterval);
+            sessionStorage.removeItem(SESSION_KEY);
+            currentUserProfile = null;
+            showView('landing');
+        }
+        
+        function routeUser() {
+            if (!currentUserProfile) showView('login');
+            else if (currentUserProfile.role === 'Admin') { renderAdminDashboard(); showView('adminDashboard'); } 
+            else if (currentUserProfile.role === 'Siswa') {
+                if (currentUserProfile.selected_class_id) { renderStudentDashboard(currentUserProfile.selected_class_id); showView('studentDashboard'); } 
+                else { renderClassSelection(); showView('classSelection'); }
+            }
+        }
+
+        function renderAdminDashboard() {
+            views.adminDashboard.innerHTML = `<div class="max-w-7xl mx-auto p-4 md:p-8"><header class="flex justify-between items-center mb-8"><h2 class="text-3xl font-bold">Dasbor Admin</h2><button class="logoutBtn bg-white border border-red-400 text-red-500 font-semibold py-2 px-4 rounded-lg">Logout</button></header><div class="mb-6 grid grid-cols-1 md:grid-cols-2 gap-3" id="adminMainTabContainer"><button class="main-tab-btn p-4 bg-white rounded-lg shadow-md font-semibold active" data-tab="kelas">Kelola Kelas & Notes</button><button class="main-tab-btn p-4 bg-white rounded-lg shadow-md font-semibold" data-tab="pengguna">Kelola Pengguna</button></div><div id="adminTabContentContainer">${renderAdminTabContent('kelas')}</div></div>`;
+        }
+
+        function renderAdminTabContent(activeTab) {
+            if (activeTab === 'kelas') {
+                const classListHTML = ['10', '11', '12'].map(grade => `<div><h4 class="font-bold text-lg mb-2">Kelas ${grade}</h4><div class="space-y-2">${allClasses.filter(c => c.grade === grade).sort((a,b) => a.name.localeCompare(b.name)).map(cls => `<div class="p-3 bg-white border rounded-lg flex justify-between items-center"><p class="font-bold">${cls.name}</p><button data-class-id="${cls.id}" class="edit-schedule-btn text-white text-xs font-semibold py-1 px-3 rounded-md bg-blue-500 hover:bg-blue-600">Kelola</button></div>`).join('')}</div></div>`).join('');
+                return `<div class="grid grid-cols-1 lg:grid-cols-3 gap-6"><div class="lg:col-span-2 bg-white p-4 rounded-2xl shadow-sm"><h3 class="text-xl font-semibold mb-2">Daftar Kelas</h3><div class="grid grid-cols-1 md:grid-cols-3 gap-4">${classListHTML}</div></div><div class="bg-white p-4 rounded-2xl shadow-sm"><h3 class="text-xl font-semibold mb-2">Kelola Mini Notes</h3><label class="text-sm font-medium">Quote</label><textarea id="quoteInput" class="w-full border p-2 rounded-md h-20">${miniNotes.quote||''}</textarea><label class="text-sm font-medium">Pengumuman</label><textarea id="announcementInput" class="w-full border p-2 rounded-md h-24">${miniNotes.announcement||''}</textarea><button id="saveNotesBtn" class="w-full mt-2 text-white font-bold py-2 rounded-lg bg-blue-500 hover:bg-blue-600">Simpan Notes</button></div></div>`;
+            }
+            if (activeTab === 'pengguna') {
+                return `<div class="space-y-6"><div class="flex justify-end"><button id="addUserBtn" class="font-bold py-2 px-5 rounded-lg text-white bg-yellow-500 hover:bg-yellow-600"><i class="fas fa-plus mr-2"></i>Tambah Pengguna</button></div><div class="bg-white p-4 rounded-2xl shadow-sm overflow-x-auto"><h3 class="text-xl font-semibold mb-4">Pengguna Terdaftar (${allUsers.length})</h3><table class="w-full text-sm text-left"><thead class="bg-slate-100 text-xs uppercase text-slate-700"><tr><th class="p-3">Nama Lengkap</th><th class="p-3">Peran</th><th class="p-3">Tingkat</th><th class="p-3 text-right">Aksi</th></tr></thead><tbody>${allUsers.sort((a,b)=>a.full_name.localeCompare(b.full_name)).map(user=>`<tr class="border-b hover:bg-slate-50"><td class="p-3 font-medium">${user.full_name}</td><td class="p-3">${user.role}</td><td class="p-3">${user.grade||'-'}</td><td class="p-3 text-right">${user.id!==currentUserProfile.id?`<button data-user-id="${user.id}" class="edit-user-btn bg-yellow-400 text-yellow-800 text-xs font-semibold py-1 px-2 rounded mr-1">Edit</button><button data-user-id="${user.id}" data-user-name="${user.full_name}" class="delete-user-btn bg-red-500 text-white text-xs font-semibold py-1 px-2 rounded">Hapus</button>`:'<span class="text-xs text-slate-400">Anda</span>'}</td></tr>`).join('')}</tbody></table></div></div>`;
+            }
+        }
+
+        function renderStudentDashboard(classId) {
+            const cls = allClasses.find(c => c.id === classId);
+            if (!cls) { showAlert('Kelas tidak ditemukan.'); handleLogout(); return; }
+            const fullDate = new Date().toLocaleDateString('id-ID', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+            views.studentDashboard.innerHTML = `<div class="max-w-7xl mx-auto p-4 md:p-8"><header class="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4"><div><h2 class="text-3xl font-bold">Selamat Datang, ${currentUserProfile.full_name}!</h2><p class="text-xl font-semibold mt-2" style="color: var(--c-text-light);">Kelas ${cls.name}</p><p class="text-sm font-medium text-slate-400">${fullDate}</p></div><div class="flex items-center gap-4"><div class="text-sm flex items-center gap-2"><label for="notifToggle">Notifikasi</label><label class="toggle-switch"><input type="checkbox" id="notifToggle" ${currentUserProfile.notifications_enabled ? 'checked' : ''}><span class="toggle-slider" style="background-color: ${currentUserProfile.notifications_enabled ? 'var(--c-primary)' : '#ccc'};"></span></label></div><button class="changeClassBtn text-sm font-semibold py-2 px-4 rounded-lg bg-white border border-yellow-500 text-yellow-600">Ganti Kelas</button><button class="logoutBtn text-sm text-white font-semibold py-2 px-4 rounded-lg bg-blue-500 hover:bg-blue-600">Logout</button></div></header><div class="mb-6 grid grid-cols-2 md:grid-cols-4 gap-3" id="mainTabContainer"><button class="main-tab-btn p-4 bg-white rounded-lg shadow-md font-semibold active" data-tab="jadwalPelajaran">Jadwal Pelajaran</button><button class="main-tab-btn p-4 bg-white rounded-lg shadow-md font-semibold" data-tab="jadwalPiket">Jadwal Piket</button><button class="main-tab-btn p-4 bg-white rounded-lg shadow-md font-semibold" data-tab="organigram">Organigram</button><button class="main-tab-btn p-4 bg-white rounded-lg shadow-md font-semibold" data-tab="jurnalMood">Jurnal Mood</button></div><div id="tabContentContainer">${renderStudentTabContent(cls, 'jadwalPelajaran')}</div><div class="mt-6 bg-white p-4 rounded-2xl shadow-md"><h3 class="font-bold text-lg mb-2">Mini Notes</h3><div class="p-3 rounded-lg mb-2 bg-yellow-100"><p class="text-sm font-semibold">Quote Hari Ini:</p><p class="text-sm italic">"${miniNotes.quote||''}"</p></div><div class="p-3 rounded-lg bg-blue-100"><p class="text-sm font-semibold">Pengumuman:</p><p class="text-sm">${miniNotes.announcement||''}</p></div></div></div>`;
+            setupNotifications();
+        }
+
+        function renderStudentTabContent(cls, activeTab) {
+            if (activeTab === 'jadwalPelajaran') return `<div class="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-4">${allDays.map(day=>`<div class="bg-white p-4 rounded-xl shadow-sm"><h4 class="font-bold text-center border-b pb-2 mb-2">${day}</h4><div class="space-y-2">${(cls.lessons||[]).filter(l=>l.day===day).sort((a,b)=>a.time.localeCompare(b.time)).map(l=>`<div class="text-sm"><p class="font-semibold">${l.subject}</p><p class="text-xs text-slate-500">${l.time} - ${l.teacher}</p></div>`).join('')||'<p class="text-xs text-center text-slate-400">Libur</p>'}</div></div>`).join('')}</div>`;
+            if (activeTab === 'jadwalPiket') return `<div class="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-4">${allDays.map(day=>`<div class="bg-white p-4 rounded-xl shadow-sm"><h4 class="font-bold text-center border-b pb-2 mb-2">${day}</h4><ul class="list-disc list-inside text-sm space-y-1 pl-2">${((cls.picket||[]).find(p=>p.day===day)?.members||[]).map(m=>`<li>${m}</li>`).join('')||'<p class="text-xs text-center text-slate-400">-</p>'}</ul></div>`).join('')}</div>`;
+            if (activeTab === 'organigram') {
+                const org = cls.organigram || {};
+                const fields = [ {label: 'Wali Kelas', value: org.waliKelas}, {label: 'Ketua Murid', value: org.ketuaMurid}, {label: 'Wakil Ketua', value: org.wakilKetua}, {label: 'Sekertaris 1', value: org.sekertaris1}, {label: 'Sekertaris 2', value: org.sekertaris2}, {label: 'Bendahara 1', value: org.bendahara1}, {label: 'Bendahara 2', value: org.bendahara2} ];
+                return `<div class="bg-white p-6 rounded-2xl shadow-sm text-center"><h3 class="text-2xl font-bold mb-8">Struktur Organisasi Kelas</h3><div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">${fields.map(f=>`<div><div class="text-sm text-slate-500">${f.label}</div><div class="font-semibold text-lg">${f.value||'-'}</div></div>`).join('')}</div><div class="mt-4 border-t pt-4"><div class="text-sm text-slate-500">Seksi & Anggota Lain</div><p class="whitespace-pre-wrap">${org.seksi || '-'}</p></div></div>`;
+            }
+            if (activeTab === 'jurnalMood') return renderMoodJournalTab();
+        }
+        
+        function getInspirationalQuote(mood) {
+            const quotes = {
+                'Senang': "“Kebahagiaan bukan sesuatu yang sudah jadi. Itu berasal dari tindakanmu sendiri.” - Dalai Lama",
+                'Sedih': "“Jangan biarkan kesedihan masa lalumu merusak kebahagiaan masa kini.” - Anonim",
+                'Biasa': "“Setiap hari mungkin tidak baik, tapi ada sesuatu yang baik di setiap hari.” - Alice Morse Earle",
+                'Marah': "“Memegang amarah seperti menggenggam bara panas; kamulah yang terbakar.” - Buddha",
+                'Semangat': "“Percayalah kamu bisa dan kamu sudah setengah jalan.” - Theodore Roosevelt",
+                'default': "“Mulailah dari mana kamu berada. Lakukan apa yang kamu bisa.” - Arthur Ashe"
+            };
+            return quotes[mood] || quotes['default'];
+        }
+
+        function renderMoodJournalTab() {
+            const today = new Date().toISOString().slice(0, 10);
+            const todayLog = moodLogs.find(log => log.userId === currentUserProfile.id && log.date === today);
+            const moods = [{icon: '😊', name: 'Senang'}, {icon: '😢', name: 'Sedih'}, {icon: '😐', name: 'Biasa'}, {icon: '😠', name: 'Marah'}, {icon: '🤩', name: 'Semangat'}];
+            const now = new Date();
+            const year = now.getFullYear(); const month = now.getMonth();
+            const daysInMonth = new Date(year, month + 1, 0).getDate();
+            const firstDayOfMonth = new Date(year, month, 1).getDay();
+            const dayOffset = (firstDayOfMonth === 0) ? 6 : firstDayOfMonth - 1;
+            let calendarHTML = `<h4 class="font-bold text-lg mb-2 text-center">Rekapan Bulan Ini</h4><div class="text-center font-semibold mb-2">${now.toLocaleDateString('id-ID', {month: 'long', year: 'numeric'})}</div><div class="mood-calendar text-slate-500"><div class="font-bold text-xs">S</div><div class="font-bold text-xs">S</div><div class="font-bold text-xs">R</div><div class="font-bold text-xs">K</div><div class="font-bold text-xs">J</div><div class="font-bold text-xs">S</div><div class="font-bold text-xs">M</div>`;
+            for(let i = 0; i < dayOffset; i++) calendarHTML += `<div></div>`;
+            for(let day = 1; day <= daysInMonth; day++) {
+                const dateStr = `${year}-${String(month+1).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
+                const log = moodLogs.find(l => l.userId === currentUserProfile.id && l.date === dateStr);
+                const moodColor = { 'Senang': '#a7f3d0', 'Sedih': '#bfdbfe', 'Biasa': '#f5f5f4', 'Marah': '#fecaca', 'Semangat': '#fef08a' }[log?.mood];
+                calendarHTML += log ? `<div style="background-color: ${moodColor};" title="${log.note||log.mood}">${moods.find(m=>m.name===log.mood)?.icon||'📝'}</div>` : `<div class="calendar-day">${day}</div>`;
+            }
+            calendarHTML += '</div>';
+
+            return `<div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <div class="bg-white p-6 rounded-2xl shadow-sm space-y-4">
+                    <h4 class="font-bold text-lg">Bagaimana perasaanmu hari ini?</h4>
+                    <div class="flex justify-around">${moods.map(mood => `<button class="mood-btn text-4xl p-2 rounded-full transition ${todayLog?.mood===mood.name ? 'bg-yellow-200' : 'hover:bg-yellow-100'}" data-mood="${mood.name}">${mood.icon}</button>`).join('')}</div>
+                    <textarea id="moodNote" class="w-full border p-2 rounded-md h-20" placeholder="Tambah catatan singkat...">${todayLog?.note||''}</textarea>
+                    <button id="saveMoodBtn" class="w-full text-white font-bold py-2 rounded-lg bg-blue-500 hover:bg-blue-600">Simpan Mood Hari Ini</button>
+                    <div id="quoteContainer" class="text-center p-3 rounded-lg bg-slate-50 text-sm italic">${getInspirationalQuote(todayLog?.mood)}</div>
+                </div>
+                <div class="bg-white p-6 rounded-2xl shadow-sm">
+                    ${calendarHTML}
+                </div>
+            </div>`;
+        }
+
+        function renderClassSelection() {
+            const userGrade = currentUserProfile.grade;
+            const availableClasses = allClasses.filter(c => c.grade === userGrade);
+            views.classSelection.innerHTML = `<div class="max-w-4xl mx-auto p-4 md:p-8"><h2 class="text-3xl font-bold text-center mb-2">Pilih Kelasmu</h2><p class="text-center text-slate-500 mb-8">Hanya kelas tingkat ${userGrade} yang ditampilkan.</p><div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">${availableClasses.length > 0 ? availableClasses.sort((a,b)=>a.name.localeCompare(b.name)).map(cls=>`<button data-class-id="${cls.id}" class="class-select-btn p-6 bg-white rounded-xl shadow-md hover:shadow-lg transition text-center font-bold text-lg hover:bg-blue-100">${cls.name}</button>`).join('') : `<p class="col-span-full text-center text-slate-500 bg-white p-6 rounded-xl">Belum ada kelas.</p>`}</div><div class="text-center mt-8"><button class="logoutBtn hover:underline text-blue-500">Logout</button></div></div>`; 
+        }
+
+        function renderScheduleEditForms(cls) {
+            document.getElementById('lessonScheduleFormContainer').innerHTML = (cls.lessons || []).map(lesson => createLessonRowHTML(lesson)).join('');
+            document.getElementById('picketScheduleFormContainer').innerHTML = (cls.picket || []).map(picket => createPicketRowHTML(picket)).join('');
+            const org = cls.organigram || {};
+            document.getElementById('organigramFormContainer').innerHTML = `<div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div><label class="block text-sm font-medium">Wali Kelas</label><input type="text" id="waliKelasInput" value="${org.waliKelas||''}" class="w-full mt-1 p-2 border rounded-md"></div>
+                <div><label class="block text-sm font-medium">Ketua Murid</label><input type="text" id="ketuaMuridInput" value="${org.ketuaMurid||''}" class="w-full mt-1 p-2 border rounded-md"></div>
+                <div><label class="block text-sm font-medium">Wakil Ketua</label><input type="text" id="wakilKetuaInput" value="${org.wakilKetua||''}" class="w-full mt-1 p-2 border rounded-md"></div>
+                <div><label class="block text-sm font-medium">Sekertaris 1</label><input type="text" id="sekertaris1Input" value="${org.sekertaris1||''}" class="w-full mt-1 p-2 border rounded-md"></div>
+                <div><label class="block text-sm font-medium">Sekertaris 2</label><input type="text" id="sekertaris2Input" value="${org.sekertaris2||''}" class="w-full mt-1 p-2 border rounded-md"></div>
+                <div><label class="block text-sm font-medium">Bendahara 1</label><input type="text" id="bendahara1Input" value="${org.bendahara1||''}" class="w-full mt-1 p-2 border rounded-md"></div>
+                <div><label class="block text-sm font-medium">Bendahara 2</label><input type="text" id="bendahara2Input" value="${org.bendahara2||''}" class="w-full mt-1 p-2 border rounded-md"></div>
+                <div class="md:col-span-3"><label class="block text-sm font-medium">Seksi & Anggota Lain</label><textarea id="seksiInput" class="w-full mt-1 p-2 border rounded-md h-24">${org.seksi||''}</textarea></div>
+            </div>`;
+        }
+
+        const createLessonRowHTML = (lesson={}) => `<div class="grid grid-cols-12 gap-2 items-center lesson-row"><div class="col-span-3"><select class="w-full p-2 border rounded-md text-sm lesson-day">${allDays.map(d=>`<option value="${d}" ${lesson.day===d?'selected':''}>${d}</option>`).join('')}</select></div><div class="col-span-2"><input type="text" value="${lesson.time||''}" placeholder="07:00" class="w-full p-2 border rounded-md text-sm lesson-time"></div><div class="col-span-3"><input type="text" value="${lesson.subject||''}" placeholder="Pelajaran" class="w-full p-2 border rounded-md text-sm lesson-subject"></div><div class="col-span-3"><input type="text" value="${lesson.teacher||''}" placeholder="Guru" class="w-full p-2 border rounded-md text-sm lesson-teacher"></div><div class="col-span-1"><button class="remove-row-btn text-red-500 hover:text-red-700 text-xl">&times;</button></div></div>`;
+        const createPicketRowHTML = (picket={}) => `<div class="grid grid-cols-12 gap-2 items-center picket-row"><div class="col-span-3"><select class="w-full p-2 border rounded-md text-sm picket-day">${allDays.map(d=>`<option value="${d}" ${picket.day===d?'selected':''}>${d}</option>`).join('')}</select></div><div class="col-span-8"><input type="text" value="${(picket.members||[]).join(', ')}" placeholder="Anggota, pisahkan koma" class="w-full p-2 border rounded-md text-sm picket-members"></div><div class="col-span-1"><button class="remove-row-btn text-red-500 hover:text-red-700 text-xl">&times;</button></div></div>`;
+        
+        function setupNotifications() {
+            if (notificationInterval) clearInterval(notificationInterval);
+            if (!currentUserProfile || !currentUserProfile.notifications_enabled || !currentUserProfile.selected_class_id) return;
+            Notification.requestPermission().then(permission => {
+                if (permission !== 'granted') return;
+                notificationInterval = setInterval(() => {
+                    const now = new Date();
+                    const currentDay = allDays[now.getDay() - 1];
+                    if (!currentDay) return;
+                    const cls = allClasses.find(c => c.id === currentUserProfile.selected_class_id);
+                    if (!cls || !cls.lessons) return;
+                    cls.lessons.forEach(lesson => {
+                        if (lesson.day === currentDay) {
+                            const [hours, minutes] = lesson.time.split(':').map(Number);
+                            if (isNaN(hours) || isNaN(minutes)) return;
+                            const classTime = new Date(); classTime.setHours(hours, minutes, 0, 0);
+                            const diff = (classTime.getTime() - now.getTime()) / 60000;
+                            if (diff > 4.9 && diff <= 5) { new Notification('Jadwal Pelajaran', { body: `${lesson.subject} akan dimulai 5 menit lagi.`, icon: 'https://placehold.co/48x48/93c5fd/ffffff?text=🔔' }); }
+                        }
+                    });
+                }, 60000);
+            });
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            initializeDB(); 
+            loadDataFromDB();
+            
+            showView('intro'); 
+
+            setTimeout(() => {
+                const session = sessionStorage.getItem(SESSION_KEY);
+                if (session) { 
+                    currentUserProfile = JSON.parse(session); 
+                    routeUser(); 
+                } else { 
+                    showView('landing'); 
+                }
+            }, 2500);
+
+            document.getElementById('loginRole').dispatchEvent(new Event('change'));
+            document.getElementById('editRole').addEventListener('change', e => { 
+                document.getElementById('editUserGradeContainer').style.display = e.target.value === 'Siswa' ? 'block' : 'none'; 
+            });
+        });
+        
+        document.getElementById('goToLoginBtn').addEventListener('click', () => showView('login'));
+        document.getElementById('backToLandingBtn').addEventListener('click', () => showView('landing'));
+        document.getElementById('authForm').addEventListener('submit', e => { e.preventDefault(); handleLogin(document.getElementById('fullName').value, document.getElementById('password').value, document.getElementById('loginRole').value, document.getElementById('loginGrade').value); });
+        document.getElementById('loginRole').addEventListener('change', e => { document.getElementById('loginGradeContainer').style.display = e.target.value === 'Siswa' ? 'block' : 'none'; });
+        
+        document.getElementById('app').addEventListener('click', e => {
+            const button = e.target.closest('button');
+            if (button) {
+                if (button.classList.contains('logoutBtn')) handleLogout();
+                if (button.classList.contains('changeClassBtn')) { currentUserProfile.selected_class_id = null; const userIndex = allUsers.findIndex(u=>u.id===currentUserProfile.id); if(userIndex !== -1) allUsers[userIndex] = currentUserProfile; saveDataToDB(); sessionStorage.setItem(SESSION_KEY, JSON.stringify(currentUserProfile)); renderClassSelection(); showView('classSelection'); }
+                if (button.classList.contains('class-select-btn')) { const classId = button.dataset.classId; currentUserProfile.selected_class_id = classId; const userIndex = allUsers.findIndex(u=>u.id===currentUserProfile.id); if(userIndex!==-1) allUsers[userIndex]=currentUserProfile; saveDataToDB(); sessionStorage.setItem(SESSION_KEY, JSON.stringify(currentUserProfile)); renderStudentDashboard(classId); showView('studentDashboard'); }
+                if (button.classList.contains('main-tab-btn')) { const tabId = button.dataset.tab; button.parentElement.querySelectorAll('.main-tab-btn').forEach(b => b.classList.remove('active')); button.classList.add('active'); if(button.parentElement.id === 'adminMainTabContainer') document.getElementById('adminTabContentContainer').innerHTML = renderAdminTabContent(tabId); else { const cls = allClasses.find(c => c.id === currentUserProfile.selected_class_id); document.getElementById('tabContentContainer').innerHTML = renderStudentTabContent(cls, tabId); } }
+                if (button.id === 'addUserBtn') { document.getElementById('userAddForm').reset(); showModal('userAdd'); }
+                if (button.classList.contains('delete-user-btn')) { itemToDelete = { type: 'user', id: button.dataset.userId, name: button.dataset.userName }; document.getElementById('confirmTitle').textContent = 'Hapus Pengguna?'; document.getElementById('confirmText').textContent = `Yakin ingin menghapus ${itemToDelete.name}?`; showModal('confirm'); }
+                if (button.classList.contains('edit-user-btn')) { currentEditingUserId = button.dataset.userId; const user = allUsers.find(u => u.id === currentEditingUserId); if(user) { document.getElementById('editUserId').value = user.id; document.getElementById('editFullName').value = user.full_name; document.getElementById('editPassword').value = ''; document.getElementById('editRole').value = user.role; document.getElementById('editGrade').value = user.grade || '10'; document.getElementById('editRole').dispatchEvent(new Event('change')); showModal('userEdit'); } }
+                if (button.id === 'saveNotesBtn') { miniNotes.quote = document.getElementById('quoteInput').value; miniNotes.announcement = document.getElementById('announcementInput').value; saveDataToDB(); showAlert('Notes berhasil disimpan.', false); }
+                if (button.classList.contains('edit-schedule-btn')) { currentEditingClassId = button.dataset.classId; const cls = allClasses.find(c => c.id === currentEditingClassId); if (cls) { document.getElementById('scheduleModalTitle').textContent = `Kelola Jadwal Kelas ${cls.name}`; renderScheduleEditForms(cls); showModal('schedule'); } }
+                if(button.classList.contains('mood-btn')) { document.querySelectorAll('.mood-btn').forEach(b => b.classList.remove('bg-yellow-200')); button.classList.add('bg-yellow-200'); const quote = getInspirationalQuote(button.dataset.mood); document.getElementById('quoteContainer').textContent = quote; }
+                if(button.id === 'saveMoodBtn') {
+                    const selectedMood = document.querySelector('.mood-btn.bg-yellow-200')?.dataset.mood;
+                    if(!selectedMood) { showAlert('Pilih mood terlebih dahulu.'); return; }
+                    const note = document.getElementById('moodNote').value;
+                    const today = new Date().toISOString().slice(0, 10);
+                    const logIndex = moodLogs.findIndex(l => l.userId === currentUserProfile.id && l.date === today);
+                    if(logIndex > -1) moodLogs[logIndex] = { ...moodLogs[logIndex], mood: selectedMood, note: note };
+                    else moodLogs.push({ logId: 'mood' + Date.now(), userId: currentUserProfile.id, date: today, mood: selectedMood, note: note });
+                    saveDataToDB(); showAlert('Mood berhasil disimpan.', false); document.getElementById('tabContentContainer').innerHTML = renderMoodJournalTab();
+                }
+            }
+        });
+
+        document.getElementById('app').addEventListener('change', e => {
+            if (e.target.id === 'notifToggle') {
+                const userIndex = allUsers.findIndex(u => u.id === currentUserProfile.id);
+                if (userIndex !== -1) { 
+                    allUsers[userIndex].notifications_enabled = e.target.checked; 
+                    currentUserProfile.notifications_enabled = e.target.checked; 
+                    saveDataToDB(); 
+                    sessionStorage.setItem(SESSION_KEY, JSON.stringify(currentUserProfile)); 
+                    showAlert(`Notifikasi ${e.target.checked ? 'diaktifkan' : 'dinonaktifkan'}.`, false); 
+                    setupNotifications(); 
+                    e.target.nextElementSibling.style.backgroundColor = e.target.checked ? 'var(--c-primary)' : '#ccc';
+                }
+            }
+        });
+
+        document.getElementById('scheduleEditModal').addEventListener('click', e => {
+            if(e.target.id === 'addLessonBtn') document.getElementById('lessonScheduleFormContainer').insertAdjacentHTML('beforeend', createLessonRowHTML());
+            if(e.target.id === 'addPicketBtn') document.getElementById('picketScheduleFormContainer').insertAdjacentHTML('beforeend', createPicketRowHTML());
+            if(e.target.matches('.remove-row-btn')) e.target.closest('.lesson-row, .picket-row').remove();
+        });
+
+        document.querySelectorAll('.modal-close-btn, #cancelDeleteBtn').forEach(btn => btn.addEventListener('click', () => closeModal()));
+
+        document.getElementById('confirmDeleteBtn').addEventListener('click', () => {
+            if (itemToDelete.type === 'user') { allUsers = allUsers.filter(u => u.id !== itemToDelete.id); showAlert('Pengguna berhasil dihapus.', false); }
+            saveDataToDB(); renderAdminDashboard(); closeModal();
+        });
+
+        document.getElementById('userAddForm').addEventListener('submit', e => {
+            e.preventDefault();
+            const fullName = document.getElementById('newFullName').value;
+            if (allUsers.some(u => u.full_name.toLowerCase() === fullName.toLowerCase())) { showAlert('Nama lengkap sudah terdaftar.'); return; }
+            const role = document.getElementById('newRole').value;
+            const newUser = { id: 'user' + Date.now(), full_name: fullName, password: document.getElementById('newPassword').value, role: role, grade: role === 'Siswa' ? document.getElementById('newGrade').value : null, selected_class_id: null, notifications_enabled: true };
+            allUsers.push(newUser); saveDataToDB(); showAlert('Pengguna baru ditambahkan.', false); renderAdminDashboard(); closeModal();
+        });
+
+        document.getElementById('userEditForm').addEventListener('submit', e => {
+            e.preventDefault();
+            const userId = document.getElementById('editUserId').value;
+            const userIndex = allUsers.findIndex(u => u.id === userId);
+            if (userIndex === -1) { showAlert('Pengguna tidak ditemukan.'); return; }
+            const newFullName = document.getElementById('editFullName').value;
+            if (allUsers.some(u => u.id !== userId && u.full_name.toLowerCase() === newFullName.toLowerCase())) { showAlert('Nama lengkap sudah digunakan pengguna lain.'); return; }
+            
+            allUsers[userIndex].full_name = newFullName;
+            const newPassword = document.getElementById('editPassword').value;
+            if (newPassword) allUsers[userIndex].password = newPassword;
+            allUsers[userIndex].role = document.getElementById('editRole').value;
+            allUsers[userIndex].grade = allUsers[userIndex].role === 'Siswa' ? document.getElementById('editGrade').value : null;
+
+            saveDataToDB();
+            showAlert('Data pengguna berhasil diperbarui.', false);
+            renderAdminDashboard();
+            closeModal();
+        });
+        
+        document.getElementById('saveScheduleChangesBtn').addEventListener('click', () => {
+            const classIndex = allClasses.findIndex(c => c.id === currentEditingClassId);
+            if (classIndex === -1) return;
+            const lessons = Array.from(document.querySelectorAll('.lesson-row')).map(row => ({ day: row.querySelector('.lesson-day').value, time: row.querySelector('.lesson-time').value, subject: row.querySelector('.lesson-subject').value, teacher: row.querySelector('.lesson-teacher').value, })).filter(l => l.subject && l.time);
+            const picket = Array.from(document.querySelectorAll('.picket-row')).map(row => ({ day: row.querySelector('.picket-day').value, members: row.querySelector('.picket-members').value.split(',').map(m => m.trim()).filter(Boolean), })).filter(p => p.members.length > 0);
+            const organigram = { waliKelas: document.getElementById('waliKelasInput').value, ketuaMurid: document.getElementById('ketuaMuridInput').value, wakilKetua: document.getElementById('wakilKetuaInput').value, sekertaris1: document.getElementById('sekertaris1Input').value, sekertaris2: document.getElementById('sekertaris2Input').value, bendahara1: document.getElementById('bendahara1Input').value, bendahara2: document.getElementById('bendahara2Input').value, seksi: document.getElementById('seksiInput').value };
+            allClasses[classIndex] = { ...allClasses[classIndex], lessons, picket, organigram };
+            saveDataToDB(); showAlert('Jadwal berhasil diperbarui.', false); closeModal();
+        });
+
+    </script>
+</body>
+</html>
