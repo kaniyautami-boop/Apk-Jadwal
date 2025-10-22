@@ -33,7 +33,7 @@
         body { font-family: 'Poppins', sans-serif; color: var(--c-text-dark); }
         .view { display: none; }
         .view.active-view { display: block; animation: fadeIn 0.5s ease-in-out; }
-        #landingView.active-view, #loginView.active-view, #introView.active-view { display: flex; }
+        #landingView.active-view, #loginView.active-view, #introView.active-view, #classSelectionView.active-view { display: flex; }
         
         @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
         
@@ -211,13 +211,12 @@
             try {
                 const { data: usersData, error: usersError } = await supabase.from('users').select('*');
                 if (usersError) throw usersError;
-                allUsers = usersData;
+                allUsers = usersData || [];
 
                 const { data: classesData, error: classesError } = await supabase.from('classes').select('*');
                 if (classesError) throw classesError;
-                allClasses = classesData;
+                allClasses = classesData || [];
 
-                // FIX: Remove .single() to prevent error on empty table, and handle the result.
                 const { data: miniNotesData, error: miniNotesError } = await supabase.from('mini_notes').select('*').limit(1);
                 if (miniNotesError) throw miniNotesError;
                 miniNotes = (miniNotesData && miniNotesData.length > 0) ? miniNotesData[0] : {};
@@ -225,7 +224,7 @@
                 if (currentUserProfile && currentUserProfile.role === 'Siswa') {
                     const { data: moodLogsData, error: moodLogsError } = await supabase.from('mood_logs').select('*').eq('userId', currentUserProfile.id);
                     if (moodLogsError) throw moodLogsError;
-                    moodLogs = moodLogsData;
+                    moodLogs = moodLogsData || [];
                 }
             } catch (error) {
                 console.error("Error loading data:", error);
@@ -298,6 +297,11 @@
         function renderUserList() {
             const container = document.getElementById('userList');
             if (!container) return;
+            if (!Array.isArray(allUsers)) {
+                console.error("Data pengguna tidak valid:", allUsers);
+                container.innerHTML = `<p class="text-red-500">Gagal memuat data pengguna.</p>`;
+                return;
+            }
             container.innerHTML = allUsers.map(user => `
                 <div class="flex items-center justify-between p-2 rounded-md bg-slate-50">
                     <div>
@@ -328,15 +332,192 @@
             const fullDate = new Date().toLocaleDateString('id-ID', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
             views.studentDashboard.innerHTML = `<div class="max-w-7xl mx-auto p-4 md:p-8"><header class="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4"><div><h2 class="text-3xl font-bold">Selamat Datang, ${currentUserProfile.full_name}!</h2><p class="text-xl font-semibold mt-2" style="color: var(--c-text-light);">Kelas ${cls.name}</p><p class="text-sm font-medium text-slate-400">${fullDate}</p></div><div class="flex items-center gap-4"><div class="text-sm flex items-center gap-2"><label for="notifToggle">Notifikasi</label><label class="toggle-switch"><input type="checkbox" id="notifToggle" ${currentUserProfile.notifications_enabled ? 'checked' : ''}><span class="toggle-slider" style="background-color: ${currentUserProfile.notifications_enabled ? 'var(--c-primary)' : '#ccc'};"></span></label></div><button class="changeClassBtn text-sm font-semibold py-2 px-4 rounded-lg bg-white border border-yellow-500 text-yellow-600">Ganti Kelas</button><button class="logoutBtn text-sm text-white font-semibold py-2 px-4 rounded-lg bg-blue-500 hover:bg-blue-600">Logout</button></div></header><div class="mb-6 grid grid-cols-2 md:grid-cols-4 gap-3" id="mainTabContainer"><button class="main-tab-btn p-4 bg-white rounded-lg shadow-md font-semibold active" data-tab="jadwalPelajaran">Jadwal Pelajaran</button><button class="main-tab-btn p-4 bg-white rounded-lg shadow-md font-semibold" data-tab="jadwalPiket">Jadwal Piket</button><button class="main-tab-btn p-4 bg-white rounded-lg shadow-md font-semibold" data-tab="organigram">Organigram</button><button class="main-tab-btn p-4 bg-white rounded-lg shadow-md font-semibold" data-tab="jurnalMood">Jurnal Mood</button></div><div id="tabContentContainer">${renderStudentTabContent(cls, 'jadwalPelajaran')}</div><div class="mt-6 bg-white p-4 rounded-2xl shadow-md"><h3 class="font-bold text-lg mb-2">Mini Notes</h3><div class="p-3 rounded-lg mb-2 bg-yellow-100"><p class="text-sm font-semibold">Quote Hari Ini:</p><p class="text-sm italic">"${miniNotes.quote||''}"</p></div><div class="p-3 rounded-lg bg-blue-100"><p class="text-sm font-semibold">Pengumuman:</p><p class="text-sm">${miniNotes.announcement||''}</p></div></div></div>`;
         }
+        
+        const moodConfig = {
+            senang: { emoji: '😄', color: 'bg-green-100', text: 'Senang' },
+            biasa: { emoji: '🙂', color: 'bg-blue-100', text: 'Biasa Saja' },
+            sedih: { emoji: '😢', color: 'bg-slate-200', text: 'Sedih' },
+            semangat: { emoji: '🔥', color: 'bg-orange-100', text: 'Bersemangat' },
+            lelah: { emoji: '😴', color: 'bg-purple-100', text: 'Lelah' },
+        };
+
+        function renderMoodJournal() {
+            const today = new Date();
+            const monthName = today.toLocaleDateString('id-ID', { month: 'long', year: 'numeric' });
+            
+            let moodButtonsHtml = Object.entries(moodConfig).map(([key, value]) => `
+                <button class="mood-btn flex flex-col items-center gap-1 p-2 rounded-lg hover:bg-slate-100 transition" data-mood="${key}">
+                    <span class="text-3xl">${value.emoji}</span>
+                    <span class="text-xs font-medium">${value.text}</span>
+                </button>
+            `).join('');
+
+            return `
+                <div class="bg-white rounded-lg shadow-md p-6">
+                    <h3 class="font-bold text-xl mb-4">Bagaimana Perasaanmu Hari Ini?</h3>
+                    <div class="flex justify-around items-center mb-6">${moodButtonsHtml}</div>
+                    <div class="border-t pt-4">
+                        <h4 class="font-bold text-lg mb-4 text-center">${monthName}</h4>
+                        <div class="grid grid-cols-7 gap-1 text-center font-semibold text-sm mb-2">
+                            <div>Min</div><div>Sen</div><div>Sel</div><div>Rab</div><div>Kam</div><div>Jum</div><div>Sab</div>
+                        </div>
+                        <div class="mood-calendar">${createMoodCalendar()}</div>
+                    </div>
+                </div>
+            `;
+        }
+
+        function createMoodCalendar() {
+            const now = new Date();
+            const date = new Date(now.getFullYear(), now.getMonth(), 1);
+            const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+            const firstDayIndex = date.getDay(); 
+
+            let calendarHtml = '';
+            for (let i = 0; i < firstDayIndex; i++) { calendarHtml += `<div></div>`; }
+
+            for (let day = 1; day <= daysInMonth; day++) {
+                const currentDate = new Date(now.getFullYear(), now.getMonth(), day);
+                const dateString = currentDate.toISOString().split('T')[0];
+                const moodLog = moodLogs.find(log => log.date === dateString);
+                
+                let dayClass = 'calendar-day';
+                let content = day;
+                
+                if (moodLog && moodConfig[moodLog.mood]) {
+                    dayClass += ` ${moodConfig[moodLog.mood].color}`;
+                    content = moodConfig[moodLog.mood].emoji;
+                }
+                
+                if (day === now.getDate() && now.getMonth() === date.getMonth()) {
+                     dayClass += ' ring-2 ring-blue-400';
+                }
+
+                calendarHtml += `<div class="${dayClass}">${content}</div>`;
+            }
+            return calendarHtml;
+        }
+
 
         function renderStudentTabContent(cls, activeTab) {
-            // Logic for rendering student tab content...
-            return `<div>Konten untuk ${activeTab}</div>`;
+            if (activeTab === 'jadwalPelajaran') {
+                if (!cls.lessons || cls.lessons.length === 0) {
+                    return `<div class="text-center p-8 bg-white rounded-lg shadow-md"><i class="fas fa-calendar-times text-4xl text-slate-300 mb-4"></i><h3 class="font-bold text-xl">Jadwal Pelajaran Belum Dibuat</h3><p class="text-slate-500">Admin belum mengatur jadwal pelajaran untuk kelas ini.</p></div>`;
+                }
+                let tableHtml = '<div class="bg-white rounded-lg shadow-md overflow-x-auto"><table class="w-full text-sm text-left"><thead class="bg-slate-50"><tr><th class="p-3">Hari</th><th class="p-3">Waktu</th><th class="p-3">Mata Pelajaran</th><th class="p-3">Guru</th></tr></thead><tbody>';
+                allDays.forEach(day => {
+                    const lessonsForDay = cls.lessons.filter(l => l.day === day).sort((a,b) => a.time.localeCompare(b.time));
+                    if (lessonsForDay.length > 0) {
+                        lessonsForDay.forEach((lesson, index) => {
+                            tableHtml += `<tr class="border-b">`;
+                            if (index === 0) { tableHtml += `<td class="p-3 font-semibold align-top" rowspan="${lessonsForDay.length}">${day}</td>`; }
+                            tableHtml += `<td class="p-3 whitespace-nowrap">${lesson.time}</td><td class="p-3 font-medium">${lesson.subject}</td><td class="p-3">${lesson.teacher}</td></tr>`;
+                        });
+                    } else {
+                        tableHtml += `<tr class="border-b"><td class="p-3 font-semibold">${day}</td><td colspan="3" class="p-3 text-slate-400">Tidak ada jadwal</td></tr>`;
+                    }
+                });
+                return tableHtml + '</tbody></table></div>';
+            }
+            if (activeTab === 'jadwalPiket') {
+                if (!cls.picket || cls.picket.length === 0) {
+                     return `<div class="text-center p-8 bg-white rounded-lg shadow-md"><i class="fas fa-broom text-4xl text-slate-300 mb-4"></i><h3 class="font-bold text-xl">Jadwal Piket Belum Dibuat</h3><p class="text-slate-500">Admin belum mengatur jadwal piket untuk kelas ini.</p></div>`;
+                }
+                let picketHtml = '<div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">';
+                allDays.forEach(day => {
+                    const picketForDay = cls.picket.find(p => p.day === day);
+                    picketHtml += `<div class="bg-white rounded-lg shadow p-4"><h4 class="font-bold text-lg mb-2">${day}</h4>`;
+                    if (picketForDay && picketForDay.students && picketForDay.students.length > 0) {
+                        picketHtml += '<ul class="list-disc list-inside text-slate-600">';
+                        picketForDay.students.forEach(student => { picketHtml += `<li>${student}</li>`; });
+                        picketHtml += '</ul>';
+                    } else {
+                        picketHtml += '<p class="text-sm text-slate-400">Tidak ada jadwal piket</p>';
+                    }
+                    picketHtml += '</div>';
+                });
+                return picketHtml + '</div>';
+            }
+            if (activeTab === 'organigram') {
+                const { waliKelas, ketuaMurid } = cls.organigram || {};
+                return `<div class="bg-white rounded-lg shadow-md p-6"><h3 class="font-bold text-2xl mb-6 text-center">Struktur Kelas</h3><div class="grid grid-cols-1 md:grid-cols-2 gap-6 text-center"><div class="bg-blue-50 p-4 rounded-lg"><p class="text-sm font-semibold text-blue-800">Wali Kelas</p><p class="text-xl font-bold">${waliKelas || 'Belum diatur'}</p></div><div class="bg-yellow-50 p-4 rounded-lg"><p class="text-sm font-semibold text-yellow-800">Ketua Murid</p><p class="text-xl font-bold">${ketuaMurid || 'Belum diatur'}</p></div></div></div>`;
+            }
+            if (activeTab === 'jurnalMood') {
+                return renderMoodJournal();
+            }
+            return `<div class="text-center p-8 bg-white rounded-lg shadow-md"><h3 class="font-bold text-xl">Fitur Dalam Pengembangan</h3></div>`;
         }
 
 
         function renderClassSelection() {
-            // Class selection rendering logic will go here
+            const availableClasses = allClasses
+                .filter(c => c.grade === currentUserProfile.grade)
+                .sort((a, b) => a.name.localeCompare(b.name));
+
+            views.classSelection.innerHTML = `
+                <div class="flex flex-col items-center justify-center min-h-full p-4">
+                    <div class="w-full max-w-4xl text-center">
+                        <h1 class="text-4xl font-bold mb-2">Pilih Kelas Kamu</h1>
+                        <p class="text-slate-600 mb-8">Halo ${currentUserProfile.full_name}, silakan pilih kelasmu untuk melihat jadwal.</p>
+                        <div id="classGrid" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
+                            ${availableClasses.length > 0 ? availableClasses.map(cls => `
+                                <button class="select-class-btn p-4 bg-white rounded-xl shadow-md font-bold text-lg hover:bg-blue-100 transition-colors" data-id="${cls.id}">
+                                    ${cls.name}
+                                </button>
+                            `).join('') : '<p class="col-span-full text-slate-500">Tidak ada kelas yang tersedia untuk tingkat Anda.</p>'}
+                        </div>
+                        <button id="selectionLogoutBtn" class="mt-8 text-slate-500 hover:text-slate-800">Logout</button>
+                    </div>
+                </div>
+            `;
+        }
+
+        function createLessonRow(lesson = { day: 'Senin', time: '', subject: '', teacher: '' }) {
+            const dayOptions = allDays.map(d => `<option value="${d}" ${lesson.day === d ? 'selected' : ''}>${d}</option>`).join('');
+            return `
+                <div class="lesson-row grid grid-cols-1 md:grid-cols-5 gap-2 items-center">
+                    <select class="p-2 border rounded-md lesson-day">${dayOptions}</select>
+                    <input type="time" class="p-2 border rounded-md lesson-time" value="${lesson.time}">
+                    <input type="text" placeholder="Mata Pelajaran" class="p-2 border rounded-md lesson-subject" value="${lesson.subject}">
+                    <input type="text" placeholder="Nama Guru" class="p-2 border rounded-md lesson-teacher" value="${lesson.teacher}">
+                    <button type="button" class="remove-row-btn text-red-500 justify-self-center"><i class="fas fa-trash"></i></button>
+                </div>
+            `;
+        }
+
+        function createPicketRow(picket = { day: 'Senin', students: [] }) {
+            const dayOptions = allDays.map(d => `<option value="${d}" ${picket.day === d ? 'selected' : ''}>${d}</option>`).join('');
+            return `
+                <div class="picket-row grid grid-cols-1 md:grid-cols-4 gap-2 items-center">
+                    <select class="p-2 border rounded-md picket-day col-span-1">${dayOptions}</select>
+                    <input type="text" placeholder="Nama Siswa (pisahkan dengan koma)" class="p-2 border rounded-md picket-students col-span-2" value="${picket.students.join(', ')}">
+                    <button type="button" class="remove-row-btn text-red-500 justify-self-center"><i class="fas fa-trash"></i></button>
+                </div>
+            `;
+        }
+
+        function renderScheduleEditModal(cls) {
+            document.getElementById('scheduleModalTitle').textContent = `Edit Jadwal Kelas ${cls.name}`;
+
+            const lessonContainer = document.getElementById('lessonScheduleFormContainer');
+            lessonContainer.innerHTML = (cls.lessons && cls.lessons.length > 0) ? cls.lessons.map(createLessonRow).join('') : '';
+            
+            const picketContainer = document.getElementById('picketScheduleFormContainer');
+            picketContainer.innerHTML = (cls.picket && cls.picket.length > 0) ? cls.picket.map(createPicketRow).join('') : '';
+
+            const organigramContainer = document.getElementById('organigramFormContainer');
+            organigramContainer.innerHTML = `
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label for="waliKelasInput" class="block text-sm font-medium text-slate-700">Wali Kelas</label>
+                        <input type="text" id="waliKelasInput" class="mt-1 w-full p-2 border rounded-md" value="${cls.organigram?.waliKelas || ''}">
+                    </div>
+                    <div>
+                        <label for="ketuaMuridInput" class="block text-sm font-medium text-slate-700">Ketua Murid</label>
+                        <input type="text" id="ketuaMuridInput" class="mt-1 w-full p-2 border rounded-md" value="${cls.organigram?.ketuaMurid || ''}">
+                    </div>
+                </div>
+            `;
         }
 
 
@@ -361,6 +542,12 @@
             document.getElementById('loginRole').addEventListener('change', (e) => {
                 document.getElementById('loginGradeContainer').style.display = e.target.value === 'Siswa' ? 'block' : 'none';
             });
+            document.getElementById('newRole').addEventListener('change', (e) => {
+                document.getElementById('newUserGradeContainer').style.display = e.target.value === 'Siswa' ? 'block' : 'none';
+            });
+            document.getElementById('editRole').addEventListener('change', (e) => {
+                document.getElementById('editUserGradeContainer').style.display = e.target.value === 'Siswa' ? 'block' : 'none';
+            });
             
             document.getElementById('authForm').addEventListener('submit', async (e) => {
                 e.preventDefault();
@@ -382,18 +569,239 @@
                 showLoading(false);
             });
             
+            document.getElementById('userAddForm').addEventListener('submit', async (e) => {
+                e.preventDefault();
+                showLoading(true);
+                const fullName = document.getElementById('newFullName').value;
+                const password = document.getElementById('newPassword').value;
+                const role = document.getElementById('newRole').value;
+                const grade = document.getElementById('newGrade').value;
+
+                const newUser = {
+                    id: crypto.randomUUID(),
+                    full_name: fullName,
+                    password: password,
+                    role: role,
+                    grade: role === 'Siswa' ? grade : null,
+                    selected_class_id: null,
+                    notifications_enabled: role === 'Siswa'
+                };
+
+                const { error } = await supabase.from('users').insert([newUser]);
+                
+                if (error) {
+                    showAlert('Gagal menambahkan pengguna: ' + error.message);
+                } else {
+                    showAlert('Pengguna berhasil ditambahkan.', false);
+                    e.target.reset();
+                    closeModal();
+                    await loadDataFromDB();
+                    renderUserList();
+                }
+                showLoading(false);
+            });
+            
+            document.getElementById('userEditForm').addEventListener('submit', async (e) => {
+                e.preventDefault();
+                showLoading(true);
+                const id = document.getElementById('editUserId').value;
+                const fullName = document.getElementById('editFullName').value;
+                const password = document.getElementById('editPassword').value;
+                const role = document.getElementById('editRole').value;
+                const grade = document.getElementById('editGrade').value;
+
+                let updates = {
+                    full_name: fullName,
+                    role: role,
+                    grade: role === 'Siswa' ? grade : null,
+                };
+                if (password) {
+                    updates.password = password;
+                }
+
+                const { error } = await supabase.from('users').update(updates).eq('id', id);
+
+                if (error) {
+                    showAlert('Gagal memperbarui pengguna: ' + error.message);
+                } else {
+                    showAlert('Pengguna berhasil diperbarui.', false);
+                    closeModal();
+                    await loadDataFromDB();
+                    renderUserList();
+                }
+                showLoading(false);
+            });
+            
+            document.getElementById('confirmDeleteBtn').addEventListener('click', async () => {
+                if (!itemToDelete.id || !itemToDelete.type) return;
+
+                showLoading(true);
+                let error;
+                if (itemToDelete.type === 'user') {
+                    const result = await supabase.from('users').delete().eq('id', itemToDelete.id);
+                    error = result.error;
+                }
+
+                if (error) {
+                    showAlert('Gagal menghapus: ' + error.message);
+                } else {
+                    showAlert(`${itemToDelete.name} berhasil dihapus.`, false);
+                    await loadDataFromDB();
+                    if(itemToDelete.type === 'user') renderUserList();
+                }
+                
+                closeModal();
+                itemToDelete = { type: null, id: null, name: null };
+                showLoading(false);
+            });
+
+            document.getElementById('saveScheduleChangesBtn').addEventListener('click', async () => {
+                if (!currentEditingClassId) return;
+                showLoading(true);
+
+                const lessons = Array.from(document.querySelectorAll('#lessonScheduleFormContainer .lesson-row')).map(row => ({
+                    day: row.querySelector('.lesson-day').value,
+                    time: row.querySelector('.lesson-time').value,
+                    subject: row.querySelector('.lesson-subject').value,
+                    teacher: row.querySelector('.lesson-teacher').value
+                })).filter(l => l.subject); // Hanya simpan jika ada mata pelajaran
+
+                const picket = Array.from(document.querySelectorAll('#picketScheduleFormContainer .picket-row')).map(row => ({
+                    day: row.querySelector('.picket-day').value,
+                    students: row.querySelector('.picket-students').value.split(',').map(s => s.trim()).filter(s => s)
+                }));
+
+                const organigram = {
+                    waliKelas: document.getElementById('waliKelasInput').value,
+                    ketuaMurid: document.getElementById('ketuaMuridInput').value,
+                };
+
+                const { error } = await supabase.from('classes').update({ lessons, picket, organigram }).eq('id', currentEditingClassId);
+
+                if (error) {
+                    showAlert('Gagal menyimpan jadwal: ' + error.message);
+                } else {
+                    showAlert('Jadwal berhasil disimpan.', false);
+                    closeModal();
+                    await loadDataFromDB();
+                }
+                showLoading(false);
+            });
+
+
             // Event delegation for dynamically created buttons
-            document.body.addEventListener('click', (e) => {
+            document.body.addEventListener('click', async (e) => {
                 const targetButton = e.target.closest('button');
                 if (!targetButton) return;
-
-                if (targetButton.id === 'adminLogoutBtn' || targetButton.classList.contains('logoutBtn')) {
+                
+                if (targetButton.id === 'adminLogoutBtn' || targetButton.classList.contains('logoutBtn') || targetButton.id === 'selectionLogoutBtn') {
                     handleLogout();
                 }
                 if (targetButton.id === 'addUserBtn') {
+                    document.getElementById('userAddForm').reset();
                     showModal('userAdd');
                 }
-                // More event handlers will be added here
+                 if (targetButton.id === 'addLessonBtn') {
+                    document.getElementById('lessonScheduleFormContainer').insertAdjacentHTML('beforeend', createLessonRow());
+                }
+                if (targetButton.id === 'addPicketBtn') {
+                    document.getElementById('picketScheduleFormContainer').insertAdjacentHTML('beforeend', createPicketRow());
+                }
+                if (targetButton.classList.contains('remove-row-btn')) {
+                    targetButton.parentElement.remove();
+                }
+                if (targetButton.classList.contains('edit-user-btn')) {
+                    const userId = targetButton.dataset.id;
+                    const user = allUsers.find(u => u.id === userId);
+                    if (user) {
+                        document.getElementById('editUserId').value = user.id;
+                        document.getElementById('editFullName').value = user.full_name;
+                        document.getElementById('editPassword').value = '';
+                        document.getElementById('editRole').value = user.role;
+                        document.getElementById('editGrade').value = user.grade || '10';
+                        document.getElementById('editUserGradeContainer').style.display = user.role === 'Siswa' ? 'block' : 'none';
+                        showModal('userEdit');
+                    }
+                }
+                if (targetButton.classList.contains('delete-user-btn')) {
+                    itemToDelete.id = targetButton.dataset.id;
+                    itemToDelete.name = targetButton.dataset.name;
+                    itemToDelete.type = 'user';
+                    document.getElementById('confirmTitle').textContent = 'Hapus Pengguna?';
+                    document.getElementById('confirmText').textContent = `Apakah Anda yakin ingin menghapus ${itemToDelete.name}? Tindakan ini tidak dapat dibatalkan.`;
+                    showModal('confirm');
+                }
+                 if (targetButton.classList.contains('edit-class-btn')) {
+                    const classId = targetButton.dataset.id;
+                    currentEditingClassId = classId;
+                    const cls = allClasses.find(c => c.id === classId);
+                    if (cls) {
+                        renderScheduleEditModal(cls);
+                        showModal('schedule');
+                    }
+                }
+                if (targetButton.classList.contains('select-class-btn')) {
+                    const classId = targetButton.dataset.id;
+                    showLoading(true);
+                    const { error } = await supabase.from('users').update({ selected_class_id: classId }).eq('id', currentUserProfile.id);
+                    if (error) {
+                        showAlert('Gagal memilih kelas: ' + error.message);
+                        showLoading(false);
+                    } else {
+                        currentUserProfile.selected_class_id = classId;
+                        sessionStorage.setItem(SESSION_KEY, JSON.stringify(currentUserProfile));
+                        await navigateBasedOnRole();
+                    }
+                }
+                 if (targetButton.classList.contains('changeClassBtn')) {
+                    showLoading(true);
+                    const { error } = await supabase.from('users').update({ selected_class_id: null }).eq('id', currentUserProfile.id);
+                    if (error) {
+                        showAlert('Gagal mengubah kelas: ' + error.message);
+                        showLoading(false);
+                    } else {
+                        currentUserProfile.selected_class_id = null;
+                        sessionStorage.setItem(SESSION_KEY, JSON.stringify(currentUserProfile));
+                        await navigateBasedOnRole();
+                    }
+                }
+                if (targetButton.classList.contains('main-tab-btn')) {
+                    document.querySelectorAll('.main-tab-btn').forEach(btn => btn.classList.remove('active'));
+                    targetButton.classList.add('active');
+                    const cls = allClasses.find(c => c.id === currentUserProfile.selected_class_id);
+                    document.getElementById('tabContentContainer').innerHTML = renderStudentTabContent(cls, targetButton.dataset.tab);
+                }
+                if (targetButton.classList.contains('mood-btn')) {
+                    showLoading(true);
+                    const mood = targetButton.dataset.mood;
+                    const today = new Date().toISOString().split('T')[0];
+
+                    const { data: existing, error: selectError } = await supabase
+                        .from('mood_logs')
+                        .select('id')
+                        .eq('userId', currentUserProfile.id)
+                        .eq('date', today)
+                        .single();
+
+                    let dbError;
+                    if (existing) {
+                        const { error } = await supabase.from('mood_logs').update({ mood }).eq('id', existing.id);
+                        dbError = error;
+                    } else {
+                        const { error } = await supabase.from('mood_logs').insert({ userId: currentUserProfile.id, date: today, mood });
+                        dbError = error;
+                    }
+
+                    if (dbError) {
+                        showAlert('Gagal menyimpan mood: ' + dbError.message);
+                    } else {
+                        showAlert('Mood berhasil disimpan!', false);
+                        await loadDataFromDB();
+                        const cls = allClasses.find(c => c.id === currentUserProfile.selected_class_id);
+                        document.getElementById('tabContentContainer').innerHTML = renderStudentTabContent(cls, 'jurnalMood');
+                    }
+                    showLoading(false);
+                }
             });
             
             // Close modals
@@ -412,3 +820,4 @@
     </script>
 </body>
 </html>
+
