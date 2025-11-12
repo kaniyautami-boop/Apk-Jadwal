@@ -12,6 +12,9 @@
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     
+    <!-- Chart.js Library -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
     <style>
         :root {
             --c-primary: #93c5fd; /* Soft Blue */
@@ -156,6 +159,8 @@
         let moodLogs = [];
         let currentEditingClassId = null;
         let notificationInterval = null;
+        let studentChartInstance = null;
+        let adminChartInstance = null;
         
         const allDays = ["Senin", "Selasa", "Rabu", "Kamis", "Jumat"];
         const SESSION_KEY = 'classScheduleAppSession_v5';
@@ -190,7 +195,7 @@
                     const letters = 'ABCDEFGHIJKL'.split('');
                     grades.forEach(grade => letters.forEach(letter => {
                         const className = `${grade}${letter}`;
-                        generatedClasses.push({ id: `class_${className}`, name: className, grade: grade, lessons: [], picket: [], organigram: { waliKelas: '', ketuaMurid: ''} });
+                        generatedClasses.push({ id: `class_${className}`, name: className, grade: grade, lessons: [], picket: [], organigram: { waliKelas: '', ketuaKelas: '', wakilKetua: '', sekertaris: '', bendahara: '', anggotaKelas: [] } });
                     }));
                     const { error: insertClassError } = await supabase.from('classes').insert(generatedClasses);
                     if (insertClassError) throw insertClassError;
@@ -221,10 +226,19 @@
                 if (miniNotesError) throw miniNotesError;
                 miniNotes = (miniNotesData && miniNotesData.length > 0) ? miniNotesData[0] : {};
 
-                if (currentUserProfile && currentUserProfile.role === 'Siswa') {
-                    const { data: moodLogsData, error: moodLogsError } = await supabase.from('mood_logs').select('*').eq('userId', currentUserProfile.id);
-                    if (moodLogsError) throw moodLogsError;
-                    moodLogs = moodLogsData || [];
+                // Muat log mood berdasarkan peran pengguna
+                moodLogs = [];
+                if (currentUserProfile) {
+                    if (currentUserProfile.role === 'Siswa') {
+                        const { data: moodLogsData, error: moodLogsError } = await supabase.from('mood_logs').select('*').eq('userId', currentUserProfile.id);
+                        if (moodLogsError) throw moodLogsError;
+                        moodLogs = moodLogsData || [];
+                    } else if (currentUserProfile.role === 'Admin') {
+                        // Admin memuat semua log untuk rekap
+                        const { data: moodLogsData, error: moodLogsError } = await supabase.from('mood_logs').select('*');
+                        if (moodLogsError) throw moodLogsError;
+                        moodLogs = moodLogsData || [];
+                    }
                 }
             } catch (error) {
                 console.error("Error loading data:", error);
@@ -238,6 +252,8 @@
             sessionStorage.removeItem(SESSION_KEY);
             currentUserProfile = null;
             if (notificationInterval) clearInterval(notificationInterval);
+            if (studentChartInstance) studentChartInstance.destroy();
+            if (adminChartInstance) adminChartInstance.destroy();
             showView('landing');
         }
 
@@ -288,10 +304,24 @@
                              <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2 text-center" id="classListAdmin"></div>
                         </div>
                     </div>
+                    
+                    <!-- Mood Recap -->
+                    <div class="form-container p-6 mt-8">
+                        <h2 class="text-xl font-bold mb-4">Rekap Jurnal Mood Siswa</h2>
+                        <div class="mb-4">
+                            <label for="moodRecapFilter" class="block text-sm font-medium mb-1">Filter per Kelas:</label>
+                            <select id="moodRecapFilter" class="w-full p-2 border rounded-md bg-white">
+                                <option value="all">Semua Siswa</option>
+                                ${allClasses.sort((a,b) => a.name.localeCompare(b.name)).map(c => `<option value="${c.id}">${c.name}</option>`).join('')}
+                            </select>
+                        </div>
+                        <div style="height: 300px;"><canvas id="adminMoodChart"></canvas></div>
+                    </div>
                 </div>
             `;
             renderUserList();
             renderClassListForAdmin();
+            drawAdminMoodChart('all');
         }
 
         function renderUserList() {
@@ -334,11 +364,11 @@
         }
         
         const moodConfig = {
-            senang: { emoji: '😄', color: 'bg-green-100', text: 'Senang' },
-            biasa: { emoji: '🙂', color: 'bg-blue-100', text: 'Biasa Saja' },
-            sedih: { emoji: '😢', color: 'bg-slate-200', text: 'Sedih' },
-            semangat: { emoji: '🔥', color: 'bg-orange-100', text: 'Bersemangat' },
-            lelah: { emoji: '😴', color: 'bg-purple-100', text: 'Lelah' },
+            senang: { emoji: '😄', color: 'bg-green-100', text: 'Senang', chartColor: '#4ade80' },
+            biasa: { emoji: '🙂', color: 'bg-blue-100', text: 'Biasa Saja', chartColor: '#60a5fa' },
+            sedih: { emoji: '😢', color: 'bg-slate-200', text: 'Sedih', chartColor: '#94a3b8' },
+            semangat: { emoji: '🔥', color: 'bg-orange-100', text: 'Bersemangat', chartColor: '#fb923c' },
+            lelah: { emoji: '😴', color: 'bg-purple-100', text: 'Lelah', chartColor: '#a78bfa' },
         };
 
         function renderMoodJournal() {
@@ -363,6 +393,12 @@
                         </div>
                         <div class="mood-calendar">${createMoodCalendar()}</div>
                     </div>
+                    <div class="mt-8 border-t pt-6">
+                        <h4 class="font-bold text-lg mb-4 text-center">Rekap Mood Bulan Ini</h4>
+                        <div class="max-w-xs mx-auto">
+                            <canvas id="studentMoodChart"></canvas>
+                        </div>
+                    </div>
                 </div>
             `;
         }
@@ -379,7 +415,7 @@
             for (let day = 1; day <= daysInMonth; day++) {
                 const currentDate = new Date(now.getFullYear(), now.getMonth(), day);
                 const dateString = currentDate.toISOString().split('T')[0];
-                const moodLog = moodLogs.find(log => log.date === dateString);
+                const moodLog = moodLogs.find(log => log.date === dateString && log.userId === currentUserProfile.id);
                 
                 let dayClass = 'calendar-day';
                 let content = day;
@@ -396,6 +432,105 @@
                 calendarHtml += `<div class="${dayClass}">${content}</div>`;
             }
             return calendarHtml;
+        }
+
+        function drawStudentMoodChart() {
+            if (studentChartInstance) studentChartInstance.destroy();
+            const ctx = document.getElementById('studentMoodChart')?.getContext('2d');
+            if (!ctx) return;
+
+            const now = new Date();
+            const currentMonthLogs = moodLogs.filter(log => {
+                const logDate = new Date(log.date);
+                return log.userId === currentUserProfile.id &&
+                       logDate.getMonth() === now.getMonth() &&
+                       logDate.getFullYear() === now.getFullYear();
+            });
+
+            const moodCounts = {};
+            Object.keys(moodConfig).forEach(key => moodCounts[key] = 0); // Initialize
+
+            currentMonthLogs.forEach(log => {
+                if (moodCounts.hasOwnProperty(log.mood)) {
+                    moodCounts[log.mood]++;
+                }
+            });
+
+            studentChartInstance = new Chart(ctx, {
+                type: 'doughnut',
+                data: {
+                    labels: Object.values(moodConfig).map(v => v.text),
+                    datasets: [{
+                        data: Object.keys(moodConfig).map(key => moodCounts[key]),
+                        backgroundColor: Object.values(moodConfig).map(v => v.chartColor),
+                        hoverOffset: 4
+                    }]
+                },
+                options: { 
+                    responsive: true, 
+                    plugins: { 
+                        legend: { 
+                            position: 'bottom',
+                            labels: { padding: 10 }
+                        } 
+                    } 
+                }
+            });
+        }
+        
+        function drawAdminMoodChart(classId) {
+            if (adminChartInstance) adminChartInstance.destroy();
+            const ctx = document.getElementById('adminMoodChart')?.getContext('2d');
+            if (!ctx) return;
+
+            // 1. Dapatkan ID pengguna yang relevan
+            let userIdsToInclude = [];
+            if (classId === 'all') {
+                userIdsToInclude = allUsers.filter(u => u.role === 'Siswa').map(u => u.id);
+            } else {
+                userIdsToInclude = allUsers.filter(u => u.selected_class_id === classId).map(u => u.id);
+            }
+
+            // 2. Filter log
+            const relevantLogs = moodLogs.filter(log => userIdsToInclude.includes(log.userId));
+
+            // 3. Agregat data
+            const moodCounts = {};
+            Object.keys(moodConfig).forEach(key => moodCounts[key] = 0); // Initialize
+
+            relevantLogs.forEach(log => {
+                if (moodCounts.hasOwnProperty(log.mood)) {
+                    moodCounts[log.mood]++;
+                }
+            });
+
+            // 4. Render chart
+            adminChartInstance = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: Object.values(moodConfig).map(v => v.text),
+                    datasets: [{
+                        label: 'Jumlah Catatan',
+                        data: Object.keys(moodConfig).map(key => moodCounts[key]),
+                        backgroundColor: Object.values(moodConfig).map(v => v.chartColor),
+                    }]
+                },
+                options: { 
+                    responsive: true, 
+                    maintainAspectRatio: false, 
+                    plugins: { 
+                        legend: { display: false } 
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            ticks: {
+                                precision: 0 // Hanya tampilkan angka bulat
+                            }
+                        }
+                    }
+                }
+            });
         }
 
 
@@ -439,8 +574,51 @@
                 return picketHtml + '</div>';
             }
             if (activeTab === 'organigram') {
-                const { waliKelas, ketuaMurid } = cls.organigram || {};
-                return `<div class="bg-white rounded-lg shadow-md p-6"><h3 class="font-bold text-2xl mb-6 text-center">Struktur Kelas</h3><div class="grid grid-cols-1 md:grid-cols-2 gap-6 text-center"><div class="bg-blue-50 p-4 rounded-lg"><p class="text-sm font-semibold text-blue-800">Wali Kelas</p><p class="text-xl font-bold">${waliKelas || 'Belum diatur'}</p></div><div class="bg-yellow-50 p-4 rounded-lg"><p class="text-sm font-semibold text-yellow-800">Ketua Murid</p><p class="text-xl font-bold">${ketuaMurid || 'Belum diatur'}</p></div></div></div>`;
+                const org = cls.organigram || {};
+                const waliKelas = org.waliKelas || 'Belum diatur';
+                const ketuaKelas = org.ketuaKelas || org.ketuaMurid || 'Belum diatur'; // Handle old field
+                const wakilKetua = org.wakilKetua || 'Belum diatur';
+                const sekertaris = org.sekertaris || 'Belum diatur';
+                const bendahara = org.bendahara || 'Belum diatur';
+                const anggotaKelas = org.anggotaKelas || [];
+
+                let anggotaHtml = '<p class="text-sm text-slate-400">Belum ada anggota</p>';
+                if (anggotaKelas.length > 0) {
+                    anggotaHtml = '<ul class="list-disc list-inside text-slate-600 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-1">';
+                    anggotaKelas.forEach(nama => { anggotaHtml += `<li>${nama}</li>`; });
+                    anggotaHtml += '</ul>';
+                }
+
+                return `
+                <div class="bg-white rounded-lg shadow-md p-6">
+                    <h3 class="font-bold text-2xl mb-6 text-center">Struktur Kelas</h3>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6 text-center mb-6">
+                        <div class="bg-blue-50 p-4 rounded-lg">
+                            <p class="text-sm font-semibold text-blue-800">Wali Kelas</p>
+                            <p class="text-xl font-bold">${waliKelas}</p>
+                        </div>
+                        <div class="bg-yellow-50 p-4 rounded-lg">
+                            <p class="text-sm font-semibold text-yellow-800">Ketua Kelas</p>
+                            <p class="text-xl font-bold">${ketuaKelas}</p>
+                        </div>
+                        <div class="bg-green-50 p-4 rounded-lg">
+                            <p class="text-sm font-semibold text-green-800">Wakil Ketua Kelas</p>
+                            <p class="text-xl font-bold">${wakilKetua}</p>
+                        </div>
+                        <div class="bg-indigo-50 p-4 rounded-lg">
+                            <p class="text-sm font-semibold text-indigo-800">Sekertaris</p>
+                            <p class="text-xl font-bold">${sekertaris}</p>
+                        </div>
+                        <div class="bg-pink-50 p-4 rounded-lg md:col-span-2">
+                            <p class="text-sm font-semibold text-pink-800">Bendahara</p>
+                            <p class="text-xl font-bold">${bendahara}</p>
+                        </div>
+                    </div>
+                    <div>
+                        <h4 class="font-bold text-xl mb-4 text-center">Anggota Kelas</h4>
+                        ${anggotaHtml}
+                    </div>
+                </div>`;
             }
             if (activeTab === 'jurnalMood') {
                 return renderMoodJournal();
@@ -513,8 +691,24 @@
                         <input type="text" id="waliKelasInput" class="mt-1 w-full p-2 border rounded-md" value="${cls.organigram?.waliKelas || ''}">
                     </div>
                     <div>
-                        <label for="ketuaMuridInput" class="block text-sm font-medium text-slate-700">Ketua Murid</label>
-                        <input type="text" id="ketuaMuridInput" class="mt-1 w-full p-2 border rounded-md" value="${cls.organigram?.ketuaMurid || ''}">
+                        <label for="ketuaKelasInput" class="block text-sm font-medium text-slate-700">Ketua Kelas</label>
+                        <input type="text" id="ketuaKelasInput" class="mt-1 w-full p-2 border rounded-md" value="${cls.organigram?.ketuaKelas || cls.organigram?.ketuaMurid || ''}">
+                    </div>
+                    <div>
+                        <label for="wakilKetuaInput" class="block text-sm font-medium text-slate-700">Wakil Ketua Kelas</label>
+                        <input type="text" id="wakilKetuaInput" class="mt-1 w-full p-2 border rounded-md" value="${cls.organigram?.wakilKetua || ''}">
+                    </div>
+                    <div>
+                        <label for="sekertarisInput" class="block text-sm font-medium text-slate-700">Sekertaris</label>
+                        <input type="text" id="sekertarisInput" class="mt-1 w-full p-2 border rounded-md" value="${cls.organigram?.sekertaris || ''}">
+                    </div>
+                    <div>
+                        <label for="bendaharaInput" class="block text-sm font-medium text-slate-700">Bendahara</label>
+                        <input type="text" id="bendaharaInput" class="mt-1 w-full p-2 border rounded-md" value="${cls.organigram?.bendahara || ''}">
+                    </div>
+                    <div class="md:col-span-2">
+                        <label for="anggotaKelasInput" class="block text-sm font-medium text-slate-700">Anggota Kelas (pisahkan dengan koma)</label>
+                        <textarea id="anggotaKelasInput" class="mt-1 w-full p-2 border rounded-md" rows="3">${(cls.organigram?.anggotaKelas || []).join(', ')}</textarea>
                     </div>
                 </div>
             `;
@@ -673,7 +867,11 @@
 
                 const organigram = {
                     waliKelas: document.getElementById('waliKelasInput').value,
-                    ketuaMurid: document.getElementById('ketuaMuridInput').value,
+                    ketuaKelas: document.getElementById('ketuaKelasInput').value, // Renamed from ketuaMurid
+                    wakilKetua: document.getElementById('wakilKetuaInput').value,
+                    sekertaris: document.getElementById('sekertarisInput').value,
+                    bendahara: document.getElementById('bendaharaInput').value,
+                    anggotaKelas: document.getElementById('anggotaKelasInput').value.split(',').map(s => s.trim()).filter(s => s) // Save as array
                 };
 
                 const { error } = await supabase.from('classes').update({ lessons, picket, organigram }).eq('id', currentEditingClassId);
@@ -770,6 +968,9 @@
                     targetButton.classList.add('active');
                     const cls = allClasses.find(c => c.id === currentUserProfile.selected_class_id);
                     document.getElementById('tabContentContainer').innerHTML = renderStudentTabContent(cls, targetButton.dataset.tab);
+                    if (targetButton.dataset.tab === 'jurnalMood') {
+                        setTimeout(drawStudentMoodChart, 0); // Panggil gambar chart setelah HTML dirender
+                    }
                 }
                 if (targetButton.classList.contains('mood-btn')) {
                     showLoading(true);
@@ -788,7 +989,13 @@
                         const { error } = await supabase.from('mood_logs').update({ mood }).eq('id', existing.id);
                         dbError = error;
                     } else {
-                        const { error } = await supabase.from('mood_logs').insert({ userId: currentUserProfile.id, date: today, mood });
+                        const newLog = { 
+                            logId: crypto.randomUUID(), 
+                            userId: currentUserProfile.id, 
+                            date: today, 
+                            mood 
+                        };
+                        const { error } = await supabase.from('mood_logs').insert(newLog);
                         dbError = error;
                     }
 
@@ -796,11 +1003,20 @@
                         showAlert('Gagal menyimpan mood: ' + dbError.message);
                     } else {
                         showAlert('Mood berhasil disimpan!', false);
-                        await loadDataFromDB();
+                        await loadDataFromDB(); // Muat ulang data
                         const cls = allClasses.find(c => c.id === currentUserProfile.selected_class_id);
+                        // Render ulang tab DAN chart
                         document.getElementById('tabContentContainer').innerHTML = renderStudentTabContent(cls, 'jurnalMood');
+                        setTimeout(drawStudentMoodChart, 0);
                     }
                     showLoading(false);
+                }
+            });
+
+            // Listener untuk filter admin
+            document.body.addEventListener('change', (e) => {
+                if (e.target.id === 'moodRecapFilter') {
+                    drawAdminMoodChart(e.target.value);
                 }
             });
             
@@ -820,4 +1036,3 @@
     </script>
 </body>
 </html>
-
