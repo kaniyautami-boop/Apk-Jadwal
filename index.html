@@ -14,6 +14,9 @@
     
     <!-- Chart.js Library -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    
+    <!-- SheetJS (XLSX) Library for Excel Import/Export -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 
     <style>
         :root {
@@ -123,11 +126,14 @@
         <div id="studentDashboardView" class="view"></div>
     </div>
    
+    <!-- Hidden File Input for Excel Upload -->
+    <input type="file" id="excelUploadInput" accept=".xlsx, .xls" class="hidden">
+
     <!-- MODAL-MODAL -->
     <div id="scheduleEditModal" class="fixed-modal"><div class="bg-white rounded-2xl shadow-xl w-full max-w-5xl p-6 max-h-[90vh] flex flex-col"><h3 id="scheduleModalTitle" class="text-xl font-bold mb-4 text-center"></h3><div class="flex-grow overflow-y-auto pr-2 -mr-2"><div class="mb-6"><h4 class="font-bold text-lg mb-2 border-b pb-1">Jadwal Pelajaran</h4><div id="lessonScheduleFormContainer" class="space-y-2"></div><button type="button" id="addLessonBtn" class="mt-3 text-sm text-white py-1 px-3 rounded-md bg-blue-500 hover:bg-blue-600">+ Tambah Pelajaran</button></div><div class="mb-6"><h4 class="font-bold text-lg mb-2 border-b pb-1">Jadwal Piket</h4><div id="picketScheduleFormContainer" class="space-y-2"></div><button type="button" id="addPicketBtn" class="mt-3 text-sm text-white py-1 px-3 rounded-md bg-blue-500 hover:bg-blue-600">+ Tambah Hari Piket</button></div><div><h4 class="font-bold text-lg mb-2 border-b pb-1">Organigram & Wali Kelas</h4><div id="organigramFormContainer" class="space-y-3"></div></div></div><div class="mt-6 flex justify-end gap-2 border-t pt-4"><button type="button" class="modal-close-btn bg-slate-200 py-2 px-4 rounded-md">Tutup</button><button type="button" id="saveScheduleChangesBtn" class="text-white py-2 px-4 rounded-md bg-blue-500 hover:bg-blue-600">Simpan Semua Perubahan</button></div></div></div>
     <div id="confirmModal" class="fixed-modal"><div class="bg-white rounded-2xl shadow-xl w-full max-w-sm p-6 text-center"><h3 id="confirmTitle" class="text-lg font-bold mb-2">Konfirmasi Tindakan</h3><p id="confirmText" class="text-slate-600 mb-6"></p><div class="flex justify-center gap-4"><button id="cancelDeleteBtn" class="bg-slate-200 py-2 px-6 rounded-md">Batal</button><button id="confirmDeleteBtn" class="bg-red-500 text-white py-2 px-6 rounded-md">Hapus</button></div></div></div>
     <div id="userAddModal" class="fixed-modal"><div class="bg-white rounded-2xl shadow-xl w-full max-w-md p-6"><h3 class="text-xl font-bold mb-4">Tambah Pengguna Baru</h3><form id="userAddForm"><div class="mb-4"><label for="newFullName" class="block text-sm font-medium">Nama Lengkap</label><input type="text" id="newFullName" class="w-full mt-1 p-2 border rounded-md" required></div><div class="mb-4"><label for="newPassword" class="block text-sm font-medium">Password</label><input type="password" id="newPassword" class="w-full mt-1 p-2 border rounded-md" required></div><div class="mb-4"><label for="newRole" class="block text-sm font-medium">Peran</label><select id="newRole" class="w-full mt-1 p-2 border rounded-md"><option value="Siswa" selected>Siswa</option><option value="Admin">Admin</option></select></div><div id="newUserGradeContainer" class="mb-4"><label for="newGrade" class="block text-sm font-medium">Tingkat Kelas</label><select id="newGrade" class="w-full mt-1 p-2 border rounded-md"><option value="10">10</option><option value="11">11</option><option value="12">12</option></select></div><div class="mt-6 flex justify-end gap-2"><button type="button" class="modal-close-btn bg-slate-200 py-2 px-4 rounded-md">Batal</button><button type="submit" class="text-white py-2 px-4 rounded-md bg-blue-500 hover:bg-blue-600">Tambah</button></div></form></div></div>
-    <div id="userEditModal" class="fixed-modal"><div class="bg-white rounded-2xl shadow-xl w-full max-w-md p-6"><h3 class="text-xl font-bold mb-4">Edit Pengguna</h3><form id="userEditForm"><input type="hidden" id="editUserId"><div class="mb-4"><label for="editFullName" class="block text-sm font-medium">Nama Lengkap</label><input type="text" id="editFullName" class="w-full mt-1 p-2 border rounded-md" required></div><div class="mb-4"><label for="editPassword" class="block text-sm font-medium">Password (kosongkan jika tidak diubah)</label><input type="password" id="editPassword" class="w-full mt-1 p-2 border rounded-md"></div><div class="mb-4"><label for="editRole" class="block text-sm font-medium">Peran</label><select id="editRole" class="w-full mt-1 p-2 border rounded-md"><option value="Siswa">Siswa</option><option value="Admin">Admin</option></select></div><div id="editUserGradeContainer" class="mb-4"><label for="editGrade" class="block text-sm font-medium">Tingkat Kelas</label><select id="editGrade" class="w-full mt-1 p-2 border rounded-md"><option value="10">10</option><option value="11">11</option><option value="12">12</option></select></div><div class="mt-6 flex justify-end gap-2"><button type="button" class="modal-close-btn bg-slate-200 py-2 px-4 rounded-md">Batal</button><button type="submit" class="text-white py-2 px-4 rounded-md bg-blue-500 hover:bg-blue-600">Simpan Perubahan</button></div></form></div></div>
+    <div id="userEditModal" class="fixed-modal"><div class="bg-white rounded-2xl shadow-xl w-full max-w-md p-6"><h3 class="text-xl font-bold mb-4">Edit Pengguna</h3><form id="userEditForm"><input type="hidden" id="editUserId"><div class="mb-4"><label for="editFullName" class="block text-sm font-medium">Nama Lengkap</label><input type="text" id="editFullName" class="w-full mt-1 p-2 border rounded-md" required></div><div class="mb-4"><label for="editPassword" class="block text-sm font-medium">Password (kosongkan jika tidak diubah)</label><input type="password" id="editPassword" class="w-full mt-1 p-2 border rounded-md"></div><div class="mb-4"><label for="editRole" class="block text-sm font-medium">Peran</label><select id="editRole" class="w-full mt-1 p-2 border rounded-md"><option value="Siswa">Siswa</option><option value="Admin">Admin</option></select></div><div id="editUserGradeContainer" class="mb-4"><label for="editGrade" class_alias="block text-sm font-medium">Tingkat Kelas</label><select id="editGrade" class="w-full mt-1 p-2 border rounded-md"><option value="10">10</option><option value="11">11</option><option value="12">12</option></select></div><div class="mt-6 flex justify-end gap-2"><button type="button" class="modal-close-btn bg-slate-200 py-2 px-4 rounded-md">Batal</button><button type="submit" class="text-white py-2 px-4 rounded-md bg-blue-500 hover:bg-blue-600">Simpan Perubahan</button></div></form></div></div>
     <div id="alertBox" class="fixed top-5 right-5 z-50 bg-red-500 text-white py-2 px-4 rounded-lg shadow-md hidden"><p id="alertText"></p></div>
 
     <script type="module">
@@ -302,6 +308,14 @@
                         <div class="form-container p-6">
                              <h2 class="text-xl font-bold mb-4">Manajemen Kelas</h2>
                              <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2 text-center" id="classListAdmin"></div>
+                             <div class="border-t mt-6 pt-4 flex flex-col sm:flex-row gap-2">
+                                <button id="downloadTemplateBtn" class="flex-1 text-sm bg-green-600 text-white py-2 px-4 rounded-md font-semibold hover:bg-green-700 transition">
+                                    <i class="fas fa-download mr-2"></i>Unduh Template Excel
+                                </button>
+                                <button id="uploadExcelBtn" class="flex-1 text-sm bg-blue-600 text-white py-2 px-4 rounded-md font-semibold hover:bg-blue-700 transition">
+                                    <i class="fas fa-upload mr-2"></i>Impor Jadwal dari Excel
+                                </button>
+                             </div>
                         </div>
                     </div>
                     
@@ -714,6 +728,97 @@
             `;
         }
 
+        async function handleDownloadTemplate() {
+            showLoading(true);
+            const templateLessons = [
+                { NAMA_KELAS: "Contoh: 10A", HARI: "Senin", WAKTU: "07:00", MATERI_PELAJARAN: "Matematika", NAMA_GURU: "Budi S." },
+                { NAMA_KELAS: "Contoh: 10A", HARI: "Senin", WAKTU: "08:30", MATERI_PELAJARAN: "Bahasa Indonesia", NAMA_GURU: "Ani W." },
+                { NAMA_KELAS: "Contoh: 10B", HARI: "Selasa", WAKTU: "09:00", MATERI_PELAJARAN: "Biologi", NAMA_GURU: "Eko P." }
+            ];
+            const templatePicket = [
+                { NAMA_KELAS: "Contoh: 10A", HARI: "Senin", DAFTAR_SISWA: "Siswa A, Siswa B, Siswa C" },
+                { NAMA_KELAS: "Contoh: 10A", HARI: "Selasa", DAFTAR_SISWA: "Siswa D, Siswa E" },
+                { NAMA_KELAS: "Contoh: 10B", HARI: "Rabu", DAFTAR_SISWA: "Siswa F, Siswa G, Siswa H" }
+            ];
+            const templateOrganigram = [
+                { NAMA_KELAS: "Contoh: 10A", WALI_KELAS: "Nama Wali Kelas", KETUA_KELAS: "Nama Ketua", WAKIL_KETUA: "Nama Wakil", SEKERTARIS: "Nama Sekertaris", BENDAHARA: "Nama Bendahara", ANGGOTA_KELAS: "Anggota A, Anggota B, Anggota C" }
+            ];
+
+            const wb = XLSX.utils.book_new();
+            const wsLessons = XLSX.utils.json_to_sheet(templateLessons);
+            const wsPicket = XLSX.utils.json_to_sheet(templatePicket);
+            const wsOrganigram = XLSX.utils.json_to_sheet(templateOrganigram);
+
+            XLSX.utils.book_append_sheet(wb, wsLessons, "JadwalPelajaran");
+            XLSX.utils.book_append_sheet(wb, wsPicket, "JadwalPiket");
+            XLSX.utils.book_append_sheet(wb, wsOrganigram, "Organigram");
+
+            XLSX.writeFile(wb, "Template_Jadwal_Clanvas.xlsx");
+            showLoading(false);
+            showAlert("Template berhasil diunduh. Silakan isi dan unggah kembali.", false);
+        }
+
+        async function handleExcelImport(file) {
+            showLoading(true);
+            try {
+                const data = await file.arrayBuffer();
+                const wb = XLSX.read(data);
+
+                // Pastikan sheet yang dibutuhkan ada
+                if (!wb.Sheets['JadwalPelajaran'] || !wb.Sheets['JadwalPiket'] || !wb.Sheets['Organigram']) {
+                    throw new Error("Format template tidak valid. Pastikan sheet 'JadwalPelajaran', 'JadwalPiket', dan 'Organigram' ada.");
+                }
+
+                const lessonsData = XLSX.utils.sheet_to_json(wb.Sheets['JadwalPelajaran']);
+                const picketData = XLSX.utils.sheet_to_json(wb.Sheets['JadwalPiket']);
+                const organigramData = XLSX.utils.sheet_to_json(wb.Sheets['Organigram']);
+
+                // Siapkan data update untuk Supabase
+                const updatePromises = allClasses.map(cls => {
+                    // 1. Proses Jadwal Pelajaran
+                    const classLessons = lessonsData
+                        .filter(r => r.NAMA_KELAS === cls.name)
+                        .map(r => ({ day: r.HARI, time: r.WAKTU, subject: r.MATERI_PELAJARAN, teacher: r.NAMA_GURU }));
+                    
+                    // 2. Proses Jadwal Piket
+                    const classPicket = picketData
+                        .filter(r => r.NAMA_KELAS === cls.name)
+                        .map(r => ({ day: r.HARI, students: (r.DAFTAR_SISWA || '').split(',').map(s => s.trim()).filter(s => s) }));
+
+                    // 3. Proses Organigram
+                    const classOrgData = organigramData.find(r => r.NAMA_KELAS === cls.name);
+                    let classOrganigram = cls.organigram; // Pertahankan data lama jika tidak ada di Excel
+                    if (classOrgData) {
+                        classOrganigram = {
+                            waliKelas: classOrgData.WALI_KELAS || '',
+                            ketuaKelas: classOrgData.KETUA_KELAS || '',
+                            wakilKetua: classOrgData.WAKIL_KETUA || '',
+                            sekertaris: classOrgData.SEKERTARIS || '',
+                            bendahara: classOrgData.BENDAHARA || '',
+                            anggotaKelas: (classOrgData.ANGGOTA_KELAS || '').split(',').map(s => s.trim()).filter(s => s)
+                        };
+                    }
+
+                    // Kembalikan promise untuk update
+                    return supabase.from('classes')
+                        .update({ lessons: classLessons, picket: classPicket, organigram: classOrganigram })
+                        .eq('id', cls.id);
+                });
+
+                // Jalankan semua update
+                await Promise.all(updatePromises);
+
+                await loadDataFromDB(); // Muat ulang semua data
+                showAlert("Semua jadwal berhasil diimpor dari Excel!", false);
+
+            } catch (error) {
+                console.error("Error importing Excel:", error);
+                showAlert(`Gagal mengimpor file: ${error.message}`);
+            } finally {
+                showLoading(false);
+            }
+        }
+
 
         // --- Event Listeners ---
         document.addEventListener('DOMContentLoaded', async () => {
@@ -748,17 +853,33 @@
                 showLoading(true);
                 const fullName = document.getElementById('fullName').value;
                 const password = document.getElementById('password').value;
+                const role = document.getElementById('loginRole').value;
+                const grade = document.getElementById('loginGrade').value;
                 
                 await loadDataFromDB();
                 
-                const foundUser = allUsers.find(u => u.full_name.toLowerCase() === fullName.toLowerCase() && u.password === password);
+                // PERBAIKAN: Logika login yang ketat, memeriksa nama, password, dan peran
+                const foundUser = allUsers.find(u => {
+                    const nameMatch = u.full_name.toLowerCase() === fullName.toLowerCase();
+                    const passMatch = u.password === password;
+                    const roleMatch = u.role === role;
+                    
+                    if (role === 'Siswa') {
+                        // Jika login sebagai Siswa, periksa juga tingkat kelas
+                        const gradeMatch = u.grade === grade;
+                        return nameMatch && passMatch && roleMatch && gradeMatch;
+                    } else {
+                        // Jika login sebagai Admin, tingkat kelas tidak relevan
+                        return nameMatch && passMatch && roleMatch;
+                    }
+                });
                 
                 if(foundUser) {
                     currentUserProfile = foundUser;
                     sessionStorage.setItem(SESSION_KEY, JSON.stringify(currentUserProfile));
                     await navigateBasedOnRole();
                 } else {
-                    showAlert('Nama atau password salah.');
+                    showAlert('Nama, password, peran, atau tingkat kelas tidak cocok.');
                 }
                 showLoading(false);
             });
@@ -784,7 +905,7 @@
                 const { error } = await supabase.from('users').insert([newUser]);
                 
                 if (error) {
-                    showAlert('Gagal menambahkan pengguna: ' + error.message);
+                    showAlert('Gagal menambahkan pengguna: Mungkin nama sudah ada?');
                 } else {
                     showAlert('Pengguna berhasil ditambahkan.', false);
                     e.target.reset();
@@ -1011,12 +1132,24 @@
                     }
                     showLoading(false);
                 }
+                if (targetButton.id === 'downloadTemplateBtn') {
+                    handleDownloadTemplate();
+                }
+                if (targetButton.id === 'uploadExcelBtn') {
+                    document.getElementById('excelUploadInput').click();
+                }
             });
 
-            // Listener untuk filter admin
+            // Listener untuk filter admin dan upload excel
             document.body.addEventListener('change', (e) => {
                 if (e.target.id === 'moodRecapFilter') {
                     drawAdminMoodChart(e.target.value);
+                }
+                if (e.target.id === 'excelUploadInput') {
+                    if (e.target.files && e.target.files[0]) {
+                        handleExcelImport(e.target.files[0]);
+                    }
+                    e.target.value = null; // Reset input agar bisa upload file yang sama lagi
                 }
             });
             
@@ -1036,4 +1169,3 @@
     </script>
 </body>
 </html>
-
